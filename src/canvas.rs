@@ -1,13 +1,14 @@
 use std::fmt;
 use std::ops::Range;
 
-use crate::block::{self, Block};
+use crate::block::{self, Block, Stroke};
 use crate::geometry::{Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
 use crate::shape::{Mark, Marker, Shape};
 use crate::text;
 use crate::tip::Tip;
+use crate::wedge::Wedge;
 
 /// Widest canvas [`Canvas::new`] accepts, in columns.
 pub const MAX_WIDTH: u16 = 1_000;
@@ -136,6 +137,14 @@ enum Cell {
         block: Block,
         role: Role,
     },
+    Wedge {
+        wedge: Wedge,
+        role: Role,
+    },
+    Stroke {
+        stroke: Stroke,
+        role: Role,
+    },
 }
 
 impl Cell {
@@ -143,12 +152,17 @@ impl Cell {
     const fn behind(self) -> Option<Role> {
         match self {
             Self::Block { block, role } if block.fills_half() => Some(role),
+            Self::Wedge { wedge, role } if wedge.fills_half() => Some(role),
             _ => None,
         }
     }
 
     const fn fills_cell(self) -> bool {
-        matches!(self, Self::Block { block, .. } if block.fills_cell())
+        match self {
+            Self::Block { block, .. } => block.fills_cell(),
+            Self::Wedge { wedge, .. } => wedge.fills_cell(),
+            _ => false,
+        }
     }
 }
 
@@ -300,6 +314,19 @@ impl Canvas {
         }
     }
 
+    /// Fills the part of the cell `at` that is on one side of a slanted edge; a wedge filling nothing draws nothing.
+    pub fn wedge(&mut self, at: Point, wedge: Wedge, role: Role) {
+        if !wedge.fills_nothing() {
+            self.put(usize::from(at.x), usize::from(at.y), Cell::Wedge { wedge, role });
+        }
+    }
+
+    /// Draws a line one eighth of a row thick across column `x`, `eighth` eighths of a row below the top of the canvas.
+    pub fn stroke(&mut self, x: u16, eighth: u32, role: Role) {
+        let (y, stroke) = Stroke::at(eighth);
+        self.put(usize::from(x), y as usize, Cell::Stroke { stroke, role });
+    }
+
     /// Each row as runs of text sharing a role and a background, every row exactly as wide as the canvas and without `\n`.
     pub fn rows(&self, glyphs: GlyphSet) -> impl Iterator<Item = Vec<Run>> + '_ {
         (0..self.height).map(move |y| {
@@ -425,6 +452,8 @@ fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> 
         Cell::Ellipsis { role } => (glyphs.ellipsis(), role),
         Cell::Mark { mark, role } => (glyphs.mark(mark), role),
         Cell::Block { block, role } => return Some(block.styled(role, ground, glyphs)),
+        Cell::Wedge { wedge, role } => return Some(wedge.styled(role, ground, glyphs)),
+        Cell::Stroke { stroke, role } => (stroke.glyph(glyphs), role),
     };
     Some(Styled { char, role, background: ground })
 }
@@ -432,6 +461,7 @@ fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wedge::Fill;
 
     const NODE: Frame<'static> = Frame { kind: LineKind::Light, corner: Corner::Square, title: None, role: Role::Node };
 
@@ -873,6 +903,60 @@ mod tests {
         line(&mut canvas, (0, 0), (2, 0), LineKind::Light);
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[─ Edge on None][─ Edge on Some(Series(2))][─ Edge on None]"]);
+    }
+
+    #[test]
+    fn a_stroke_over_a_bar_is_drawn_on_the_bar() {
+        let mut canvas = canvas(3, 2);
+        canvas.column(1, 3..16, Role::Series(0));
+
+        for x in 0..3 {
+            canvas.stroke(x, 5, Role::Series(1));
+        }
+
+        assert_eq!(
+            styles(&canvas, GlyphSet::Unicode),
+            [
+                "[🭺 Series(1) on None][🭺 Series(1) on Some(Series(0))][🭺 Series(1) on None]",
+                "[  Plain on None][█ Series(0) on None][  Plain on None]"
+            ]
+        );
+        assert_eq!(render(&canvas, GlyphSet::Unicode3), "───\n █ ");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "---\n # ");
+    }
+
+    #[test]
+    fn a_stroke_below_the_canvas_draws_nothing() {
+        let mut canvas = canvas(1, 1);
+
+        canvas.stroke(0, 8, Role::Series(0));
+        canvas.stroke(0, u32::MAX, Role::Series(0));
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), " ");
+    }
+
+    #[test]
+    fn a_wedge_over_a_wedge_at_least_half_a_cell_keeps_it_as_background() {
+        let mut canvas = canvas(2, 1);
+        let rising = |fill| Wedge { left: 1, right: 2, fill };
+        canvas.wedge(Point::new(0, 0), rising(Fill::Below), Role::Series(0));
+        canvas.wedge(Point::new(1, 0), Wedge { left: 0, right: 1, fill: Fill::Below }, Role::Series(0));
+
+        canvas.wedge(Point::new(0, 0), rising(Fill::Above), Role::Series(1));
+        canvas.wedge(Point::new(1, 0), rising(Fill::Above), Role::Series(1));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[🭜 Series(1) on Some(Series(0))][🭜 Series(1) on None]"]);
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "//");
+    }
+
+    #[test]
+    fn a_wedge_filling_nothing_leaves_the_cell_as_it_was() {
+        let mut canvas = canvas(1, 1);
+        canvas.text(Point::new(0, 0), "a", Role::Label);
+
+        canvas.wedge(Point::new(0, 0), Wedge { left: 0, right: 0, fill: Fill::Below }, Role::Series(0));
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "a");
     }
 
     #[test]

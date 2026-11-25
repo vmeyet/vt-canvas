@@ -275,6 +275,7 @@ mod tests {
             .chain(fills)
             .chain([GlyphSet::Unicode.ellipsis()])
             .chain(crate::block::tests::every_glyph())
+            .chain(crate::wedge::tests::every_glyph())
             .filter(|glyph| *glyph != ' ')
             .collect()
     }

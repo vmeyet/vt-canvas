@@ -1,0 +1,8 @@
+---
+source: src/block.rs
+expression: "table.join(\"\\n\")"
+---
+Unicode: ▔🭶🭷🭸🭹🭺🭻▁
+Unicode13: ▔🭶🭷🭸🭹🭺🭻▁
+Unicode3: ▔▔────▁▁
+Ascii: ""----__

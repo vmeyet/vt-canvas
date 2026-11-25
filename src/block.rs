@@ -12,7 +12,37 @@ const FROM_LEFT: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 const FROM_UP: [char; 7] = ['▔', '\u{1FB82}', '\u{1FB83}', '▀', '\u{1FB84}', '\u{1FB85}', '\u{1FB86}'];
 const FROM_RIGHT: [char; 7] = ['▕', '\u{1FB87}', '\u{1FB88}', '▐', '\u{1FB89}', '\u{1FB8A}', '\u{1FB8B}'];
 
-/// A cell filled from one of its sides, by 1 to 8 eighths.
+/// The line one eighth of a cell thick at each height, from the top of the cell down.
+const STROKES: [char; 8] = ['▔', '\u{1FB76}', '\u{1FB77}', '\u{1FB78}', '\u{1FB79}', '\u{1FB7A}', '\u{1FB7B}', '▁'];
+
+/// A horizontal line one eighth of a cell thick, `level` eighths below the top of its cell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Stroke {
+    level: u8,
+}
+
+impl Stroke {
+    /// The cell row a stroke `eighth` eighths of a row below the top of the canvas is in, and the stroke in that cell.
+    pub(crate) const fn at(eighth: u32) -> (u32, Self) {
+        (eighth / EIGHTHS as u32, Self { level: (eighth % EIGHTHS as u32) as u8 })
+    }
+
+    /// Without the Legacy Computing lines a stroke is the nearest of the top of the cell, its middle and its bottom.
+    pub(crate) const fn glyph(self, glyphs: GlyphSet) -> char {
+        let [top, middle, bottom] = match glyphs {
+            GlyphSet::Unicode | GlyphSet::Unicode13 => return STROKES[self.level as usize],
+            GlyphSet::Unicode3 => ['▔', '─', '▁'],
+            GlyphSet::Ascii => ['"', '-', '_'],
+        };
+        match self.level {
+            0..=1 => top,
+            2..=5 => middle,
+            _ => bottom,
+        }
+    }
+}
+
+/// A cell filled from one of its sides, by 0 to 8 eighths.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Block {
     from: Direction,
@@ -20,12 +50,16 @@ pub(crate) struct Block {
 }
 
 impl Block {
+    pub(crate) const fn new(from: Direction, eighths: u8) -> Self {
+        Self { from, eighths }
+    }
+
     /// The block between two offsets of a cell, `low < high <= 8`, counted from its side `low_side`.
     ///
     /// A stretch touching neither side has no glyph: it keeps its size and moves to the side it is nearer.
     const fn between(low: u8, high: u8, low_side: Direction) -> Self {
         let nearer_low = low == 0 || (high < EIGHTHS && low + high < EIGHTHS);
-        Self { from: if nearer_low { low_side } else { low_side.opposite() }, eighths: high - low }
+        Self::new(if nearer_low { low_side } else { low_side.opposite() }, high - low)
     }
 
     pub(crate) const fn fills_cell(self) -> bool {
@@ -49,7 +83,7 @@ impl Block {
 
     /// Blocks from the top and the right are Legacy Computing glyphs but for one eighth and one half;
     /// without them the block takes the nearest of one eighth, one half and the whole cell.
-    fn unicode(self, glyphs: GlyphSet) -> char {
+    pub(crate) fn unicode(self, glyphs: GlyphSet) -> char {
         let (table, in_unicode3) = match self.from {
             Direction::Down => (FROM_DOWN, true),
             Direction::Left => (FROM_LEFT, true),
@@ -57,12 +91,17 @@ impl Block {
             Direction::Right => (FROM_RIGHT, false),
         };
         let eighths = if in_unicode3 || glyphs.holds(GlyphSet::Unicode13) { self.eighths } else { coarse(self.eighths) };
-        if eighths >= EIGHTHS { glyphs.fill(Role::Plain) } else { table[usize::from(eighths.max(1)) - 1] }
+        match eighths {
+            0 => ' ',
+            1..EIGHTHS => table[usize::from(eighths) - 1],
+            _ => glyphs.fill(Role::Plain),
+        }
     }
 
     /// Under half a cell, a mark on the side the block starts from, so a small value still shows.
-    fn ascii(self, role: Role) -> char {
+    pub(crate) fn ascii(self, role: Role) -> char {
         match self.from {
+            _ if self.eighths == 0 => ' ',
             _ if self.fills_half() => GlyphSet::Ascii.fill(role),
             Direction::Down => '_',
             Direction::Up => '"',
@@ -73,7 +112,8 @@ impl Block {
 
 const fn coarse(eighths: u8) -> u8 {
     match eighths {
-        0..=2 => 1,
+        0 => 0,
+        1..=2 => 1,
         3..=5 => HALF,
         _ => EIGHTHS,
     }
@@ -100,7 +140,22 @@ pub(crate) mod tests {
     const SETS: [GlyphSet; 4] = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
 
     pub(crate) fn every_glyph() -> Vec<char> {
-        [FROM_DOWN, FROM_LEFT, FROM_UP, FROM_RIGHT].concat()
+        [&FROM_DOWN[..], &FROM_LEFT, &FROM_UP, &FROM_RIGHT, &STROKES].concat()
+    }
+
+    #[test]
+    fn strokes_sit_at_each_eighth_in_each_glyph_set() {
+        let table: Vec<String> = SETS
+            .into_iter()
+            .map(|glyphs| format!("{glyphs:?}: {}", (0..8).map(|eighth| Stroke::at(eighth).1.glyph(glyphs)).collect::<String>()))
+            .collect();
+
+        insta::assert_snapshot!(table.join("\n"));
+    }
+
+    #[test]
+    fn a_stroke_is_in_the_row_its_eighth_falls_in() {
+        assert_eq!(Stroke::at(21), (2, Stroke { level: 5 }));
     }
 
     fn blocks(cells: usize, eighths: Range<u32>) -> Vec<(usize, Block)> {
