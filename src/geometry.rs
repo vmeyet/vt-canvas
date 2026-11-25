@@ -32,6 +32,45 @@ impl Rect {
     pub const fn new(x: u16, y: u16, width: u16, height: u16) -> Self {
         Self { x, y, width, height }
     }
+
+    /// Its border, `None` when it covers no cell; a border past the last column or row stops there.
+    pub(crate) const fn border(self) -> Option<Border> {
+        if self.width == 0 || self.height == 0 {
+            return None;
+        }
+        let (width, height) = (self.width, self.height);
+        Some(Border {
+            left: self.x,
+            top: self.y,
+            right: self.x.saturating_add(width - 1),
+            bottom: self.y.saturating_add(height - 1),
+            width,
+            height,
+        })
+    }
+}
+
+/// The columns and rows of a rectangle's border, with its size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Border {
+    pub(crate) left: u16,
+    pub(crate) top: u16,
+    pub(crate) right: u16,
+    pub(crate) bottom: u16,
+    pub(crate) width: u16,
+    pub(crate) height: u16,
+}
+
+impl Border {
+    /// Clockwise from the top left.
+    pub(crate) const fn corners(self) -> [Point; 4] {
+        [
+            Point::new(self.left, self.top),
+            Point::new(self.right, self.top),
+            Point::new(self.right, self.bottom),
+            Point::new(self.left, self.bottom),
+        ]
+    }
 }
 
 /// One of the four sides of a cell, also where an arrow points.

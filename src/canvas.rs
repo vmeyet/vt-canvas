@@ -2,12 +2,14 @@ use std::fmt;
 use std::ops::Range;
 
 use crate::block::{self, Block, Cover, Stroke};
-use crate::geometry::{Direction, Point, Rect};
+use crate::frame::Corner;
+use crate::geometry::{Border, Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
 use crate::pixel::{self, Dots, Halves, Pixel};
 use crate::role::Role;
-use crate::shape::{Mark, Marker, Shape};
+use crate::shape::{Mark, Shape};
+use crate::symbol::Symbol;
 use crate::text;
 use crate::tip::Tip;
 use crate::wedge::Wedge;
@@ -26,16 +28,6 @@ pub struct Run<R> {
     pub role: R,
     /// The role behind the cells' characters, `None` where nothing is: a block a later drawing left as its background.
     pub background: Option<R>,
-}
-
-/// The corners [`Canvas::frame`] draws.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Corner {
-    /// `┌ ┐ └ ┘`
-    #[default]
-    Square,
-    /// `╭ ╮ ╰ ╯`, square when the frame is not light or dashed, as Unicode has no other arc.
-    Rounded,
 }
 
 /// A drawing the canvas refuses.
@@ -95,6 +87,15 @@ enum Cell<R> {
     /// A cell of a shape's outline that is not a line.
     Mark {
         mark: Mark,
+        role: R,
+    },
+    Tip {
+        tip: Tip,
+        direction: Direction,
+        role: R,
+    },
+    Symbol {
+        symbol: Symbol,
         role: R,
     },
     Block {
@@ -212,20 +213,8 @@ impl<R: Role> Canvas<R> {
 
     /// Draws the border of `rect` in lines of `kind`.
     pub fn frame(&mut self, rect: Rect, kind: LineKind, corner: Corner, role: R) {
-        if rect.width == 0 || rect.height == 0 {
-            return;
-        }
-        let (left, top) = (rect.x, rect.y);
-        let right = left.saturating_add(rect.width - 1);
-        let bottom = top.saturating_add(rect.height - 1);
-        let corners = [Point::new(left, top), Point::new(right, top), Point::new(right, bottom), Point::new(left, bottom)];
-        for (index, from) in corners.into_iter().enumerate() {
-            self.straight(from, corners[(index + 1) % corners.len()], kind, role);
-        }
-        if corner == Corner::Rounded {
-            for corner in corners {
-                self.round(corner);
-            }
+        if let Some(border) = rect.border() {
+            self.draw_frame(border, kind, corner, role);
         }
     }
 
@@ -233,23 +222,21 @@ impl<R: Role> Canvas<R> {
     ///
     /// A line drawn onto a slant or a bracket of the outline leaves it whole, so an edge ending on a side touches it.
     pub fn shape(&mut self, rect: Rect, shape: Shape, role: R) {
-        if rect.width == 0 || rect.height == 0 {
-            return;
-        }
-        self.frame(rect, LineKind::Light, shape.corner(), role);
-        for [from, to] in shape.inner_lines(rect) {
+        let Some(border) = rect.border() else { return };
+        self.draw_frame(border, LineKind::Light, shape.corner(), role);
+        for [from, to] in shape.inner_lines(border) {
             self.straight(from, to, LineKind::Light, role);
         }
-        for placed in shape.marks(rect) {
+        for placed in shape.marks(border) {
             self.put(usize::from(placed.at.x), usize::from(placed.at.y), Cell::Mark { mark: placed.mark, role });
         }
     }
 
-    /// Draws `marker` on one cell: a node too small for an outline.
+    /// Draws `symbol` on one cell: a node too small for an outline.
     ///
     /// Like a shape's mark, a line drawn onto it later leaves it whole, so an edge starting on it keeps it.
-    pub fn marker(&mut self, at: Point, marker: Marker, role: R) {
-        self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Marker(marker), role });
+    pub fn symbol(&mut self, at: Point, symbol: Symbol, role: R) {
+        self.put(usize::from(at.x), usize::from(at.y), Cell::Symbol { symbol, role });
     }
 
     /// Draws `tip` on one cell, facing the node `direction` points at: an arrow head points that way.
@@ -262,7 +249,7 @@ impl<R: Role> Canvas<R> {
             let across = Direction::ALL.into_iter().fold(Sides::default(), |sides, side| sides.with(side, Some(LineKind::Light)));
             self.draw_line(x, y, across, role);
         } else {
-            self.put(x, y, Cell::Mark { mark: Mark::Tip(tip, direction), role });
+            self.put(x, y, Cell::Tip { tip, direction, role });
         }
     }
 
@@ -326,6 +313,18 @@ impl<R: Role> Canvas<R> {
         })
     }
 
+    fn draw_frame(&mut self, border: Border, kind: LineKind, corner: Corner, role: R) {
+        let corners = border.corners();
+        for (index, from) in corners.into_iter().enumerate() {
+            self.straight(from, corners[(index + 1) % corners.len()], kind, role);
+        }
+        if corner == Corner::Rounded {
+            for corner in corners {
+                self.round(corner);
+            }
+        }
+    }
+
     /// `from` and `to` share a row or a column.
     fn straight(&mut self, from: Point, to: Point, kind: LineKind, role: R) {
         let horizontal = from.y == to.y;
@@ -364,7 +363,7 @@ impl<R: Role> Canvas<R> {
         let Some(index) = self.index(x, y).filter(|_| sides.count() > 0) else { return };
         match self.cells[index] {
             Cell::Line { sides: below, rounded, .. } => self.cells[index] = Cell::Line { sides: below.merge(sides), rounded, role },
-            Cell::Mark { .. } => {}
+            Cell::Mark { .. } | Cell::Tip { .. } | Cell::Symbol { .. } => {}
             _ => self.put(x, y, Cell::Line { sides, rounded: false, role }),
         }
     }
@@ -436,7 +435,9 @@ fn styled<R: Role>(cell: Cell<R>, ground: Option<R>, glyphs: GlyphSet) -> Option
         Cell::Text { char, role } => (char, role),
         Cell::Line { sides, rounded, role } => (glyphs.line(sides, rounded), role),
         Cell::Ellipsis { role } => (glyphs.ellipsis(), role),
-        Cell::Mark { mark, role } => (glyphs.mark(mark), role),
+        Cell::Mark { mark, role } => (mark.glyph(glyphs), role),
+        Cell::Tip { tip, direction, role } => (tip.glyph(direction, glyphs), role),
+        Cell::Symbol { symbol, role } => (symbol.glyph(glyphs), role),
         Cell::Block { block, role } => return Some(block.styled(role, ground, glyphs)),
         Cell::Wedge { wedge, role } => return Some(wedge.styled(role, ground, glyphs)),
         Cell::Stroke { stroke, role } => (stroke.glyph(glyphs), role),
@@ -669,11 +670,11 @@ mod tests {
     }
 
     #[test]
-    fn a_marker_fills_its_cell_and_stays_whole_under_a_line_leaving_it() {
+    fn a_symbol_fills_its_cell_and_stays_whole_under_a_line_leaving_it() {
         let mut canvas = canvas(3, 3);
-        canvas.marker(Point::new(0, 0), Marker::Dot, Part::Node);
-        canvas.marker(Point::new(2, 0), Marker::RingedDot, Part::Node);
-        canvas.marker(Point::new(1, 2), Marker::Diamond, Part::Node);
+        canvas.symbol(Point::new(0, 0), Symbol::Dot, Part::Node);
+        canvas.symbol(Point::new(2, 0), Symbol::RingedDot, Part::Node);
+        canvas.symbol(Point::new(1, 2), Symbol::FilledDiamond, Part::Node);
 
         line(&mut canvas, (0, 0), (0, 2), LineKind::Light);
 

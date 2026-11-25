@@ -44,7 +44,7 @@ fn node(canvas: &mut Canvas<Part>, at: Point, shape: Shape) {
     let name = format!("{shape:?}");
     let inset = shape.inset();
     let name_width = u16::try_from(vt_canvas::width(&name)).unwrap_or(CELL_WIDTH);
-    let rect = Rect::new(at.x, at.y, name_width + 2 + 2 * inset.side, 1 + inset.top + inset.bottom);
+    let rect = Rect::new(at.x, at.y, name_width + 2 + 2 * inset.sides, 1 + inset.top + inset.bottom);
     canvas.shape(rect, shape, Part::Node);
-    canvas.text(Point::new(at.x + inset.side + 1, at.y + inset.top), &name, Part::Label);
+    canvas.text(Point::new(at.x + inset.sides + 1, at.y + inset.top), &name, Part::Label);
 }

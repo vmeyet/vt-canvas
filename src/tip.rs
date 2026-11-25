@@ -1,3 +1,6 @@
+use crate::geometry::Direction;
+use crate::glyph::GlyphSet;
+
 /// What an edge draws on one cell at its end, facing the node it goes into: an arrow, a cross, the ends of class and ER relations.
 ///
 /// None of their glyphs is East Asian ambiguous: `○ ◆ ◇ △ ▷ ▶` are, so the set takes the small triangles, the medium
@@ -27,4 +30,29 @@ impl Tip {
     /// Every tip, in the order the documentation lists them.
     pub const ALL: [Self; 8] =
         [Self::Arrow, Self::Triangle, Self::Diamond, Self::FilledDiamond, Self::Ring, Self::Bar, Self::Fork, Self::Cross];
+
+    /// The tip facing a node `direction` points at: a fork opens onto it, an arrow or a triangle points at it.
+    ///
+    /// A bar is drawn as a line across the edge, merged with it; alone on its cell it is `┼`, `+` in ASCII.
+    pub(crate) const fn glyph(self, direction: Direction, glyphs: GlyphSet) -> char {
+        match (self, direction) {
+            (Self::Arrow, Direction::Up) => glyphs.pick('▴', '^'),
+            (Self::Arrow, Direction::Right) => glyphs.pick('▸', '>'),
+            (Self::Arrow, Direction::Down) => glyphs.pick('▾', 'v'),
+            (Self::Arrow, Direction::Left) => glyphs.pick('◂', '<'),
+            (Self::Triangle, Direction::Up) => glyphs.pick('▵', '^'),
+            (Self::Triangle, Direction::Right) => glyphs.pick('▹', '>'),
+            (Self::Triangle, Direction::Down) => glyphs.pick('▿', 'v'),
+            (Self::Triangle, Direction::Left) => glyphs.pick('◃', '<'),
+            (Self::Diamond, _) => glyphs.pick('⬦', 'o'),
+            (Self::FilledDiamond, _) => glyphs.pick('⬥', '#'),
+            (Self::Ring, _) => 'o',
+            (Self::Bar, _) => glyphs.pick('┼', '+'),
+            (Self::Fork, Direction::Right) => '<',
+            (Self::Fork, Direction::Left) => '>',
+            (Self::Fork, Direction::Down) => glyphs.pick('Ʌ', '^'),
+            (Self::Fork, Direction::Up) => glyphs.pick('V', 'v'),
+            (Self::Cross, _) => glyphs.pick('╳', 'x'),
+        }
+    }
 }

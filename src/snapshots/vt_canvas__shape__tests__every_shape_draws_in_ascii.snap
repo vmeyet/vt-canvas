@@ -7,7 +7,7 @@ Rectangle
 | Label |
 +-------+
 
-Rounded
+RoundedRectangle
 .-------.
 | Label |
 '-------'

@@ -1,7 +1,5 @@
 use crate::geometry::Direction;
 use crate::line::{LineKind, Sides};
-use crate::shape::{Mark, Marker};
-use crate::tip::Tip;
 
 /// The characters a drawing is read back in; text is written as given.
 ///
@@ -40,7 +38,8 @@ impl GlyphSet {
         }
     }
 
-    const fn pick(self, unicode: char, ascii: char) -> char {
+    /// `ascii` in the ASCII set, `unicode` in the others.
+    pub(crate) const fn pick(self, unicode: char, ascii: char) -> char {
         if matches!(self, Self::Ascii) { ascii } else { unicode }
     }
 
@@ -48,56 +47,9 @@ impl GlyphSet {
         if self == Self::Ascii { ascii_line(sides, rounded) } else { unicode_line(sides, rounded) }
     }
 
-    /// Brackets and points are ASCII in every set; the slants and the markers differ.
-    ///
-    /// The markers avoid `●` and `◇`, which are East Asian ambiguous.
-    pub(crate) const fn mark(self, mark: Mark) -> char {
-        match mark {
-            Mark::Rising => self.pick('╱', '/'),
-            Mark::Falling => self.pick('╲', '\\'),
-            Mark::LeftArc => '(',
-            Mark::RightArc => ')',
-            Mark::LeftPoint => '<',
-            Mark::RightPoint => '>',
-            Mark::Marker(Marker::Dot) => self.pick('⬤', '*'),
-            Mark::Marker(Marker::RingedDot) => self.pick('◉', '@'),
-            Mark::Marker(Marker::Diamond) => self.pick('⬥', '?'),
-            Mark::Tip(tip, direction) => self.tip(tip, direction),
-        }
-    }
-
-    /// A tip facing a node `direction` points at: a fork opens onto it, an arrow or a triangle points at it.
-    const fn tip(self, tip: Tip, direction: Direction) -> char {
-        match (tip, direction) {
-            (Tip::Arrow, _) => self.arrow(direction),
-            (Tip::Triangle, Direction::Up) => self.pick('▵', '^'),
-            (Tip::Triangle, Direction::Right) => self.pick('▹', '>'),
-            (Tip::Triangle, Direction::Down) => self.pick('▿', 'v'),
-            (Tip::Triangle, Direction::Left) => self.pick('◃', '<'),
-            (Tip::Diamond, _) => self.pick('⬦', 'o'),
-            (Tip::FilledDiamond, _) => self.pick('⬥', '#'),
-            (Tip::Ring, _) => 'o',
-            (Tip::Bar, _) => self.pick('┼', '+'),
-            (Tip::Fork, Direction::Right) => '<',
-            (Tip::Fork, Direction::Left) => '>',
-            (Tip::Fork, Direction::Down) => self.pick('Ʌ', '^'),
-            (Tip::Fork, Direction::Up) => self.pick('V', 'v'),
-            (Tip::Cross, _) => self.pick('╳', 'x'),
-        }
-    }
-
     /// `⋯`, not `…`, which is East Asian ambiguous.
     pub(crate) const fn ellipsis(self) -> char {
         self.pick('⋯', '~')
-    }
-
-    const fn arrow(self, direction: Direction) -> char {
-        match direction {
-            Direction::Up => self.pick('▴', '^'),
-            Direction::Right => self.pick('▸', '>'),
-            Direction::Down => self.pick('▾', 'v'),
-            Direction::Left => self.pick('◂', '<'),
-        }
     }
 
     /// A whole cell: `█`, or in ASCII a character of its own for each of the first textures.
@@ -222,6 +174,9 @@ const SINGLE_DOUBLE: [char; 81] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shape::Mark;
+    use crate::symbol::Symbol;
+    use crate::tip::Tip;
     use unicode_width::UnicodeWidthChar;
 
     const KINDS: [Option<LineKind>; 5] =
@@ -262,13 +217,14 @@ mod tests {
         });
         let lines = all_sides.flat_map(|sides| [false, true].map(|rounded| GlyphSet::Unicode.line(sides, rounded)));
         let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint]
-            .into_iter()
-            .chain(Marker::ALL.map(Mark::Marker))
-            .chain(Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|direction| Mark::Tip(tip, direction))))
-            .map(|mark| GlyphSet::Unicode.mark(mark));
+            .map(|mark| mark.glyph(GlyphSet::Unicode));
+        let tips = Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|direction| tip.glyph(direction, GlyphSet::Unicode)));
+        let symbols = Symbol::ALL.map(|symbol| symbol.glyph(GlyphSet::Unicode));
         let fills = [GlyphSet::Unicode.fill(0)];
         lines
             .chain(marks)
+            .chain(tips)
+            .chain(symbols)
             .chain(fills)
             .chain([GlyphSet::Unicode.ellipsis()])
             .chain(crate::block::tests::every_glyph())

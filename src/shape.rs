@@ -1,6 +1,6 @@
-use crate::canvas::Corner;
-use crate::geometry::{Direction, Point, Rect};
-use crate::tip::Tip;
+use crate::frame::Corner;
+use crate::geometry::{Border, Point};
+use crate::glyph::GlyphSet;
 
 /// The outline [`Canvas::shape`](crate::Canvas::shape) draws around a rectangle, named after Mermaid's flowchart shapes.
 ///
@@ -11,7 +11,7 @@ pub enum Shape {
     /// `┌─┐ │ │ └─┘`
     Rectangle,
     /// `╭─╮ │ │ ╰─╯`
-    Rounded,
+    RoundedRectangle,
     /// `╭─╮ ( ) ╰─╯`
     Stadium,
     /// A stadium with a blank column inside each bracket: three rows cannot curve more.
@@ -42,7 +42,7 @@ pub enum Shape {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Inset {
     /// Columns on the left, and as many on the right.
-    pub side: u16,
+    pub sides: u16,
     /// Rows at the top.
     pub top: u16,
     /// Rows at the bottom.
@@ -64,26 +64,20 @@ pub(crate) enum Mark {
     LeftPoint,
     /// `>`
     RightPoint,
-    /// A one-cell figure, drawn alone by [`Canvas::marker`](crate::Canvas::marker).
-    Marker(Marker),
-    /// An edge's end facing a node the way the edge goes, drawn by [`Canvas::tip`](crate::Canvas::tip).
-    Tip(Tip, Direction),
 }
 
-/// A figure that fills one cell: a node too small for an outline.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Marker {
-    /// `⬤`, `*` in ASCII.
-    Dot,
-    /// `◉`, `@` in ASCII: a dot inside a ring.
-    RingedDot,
-    /// `⬥`, `?` in ASCII.
-    Diamond,
-}
-
-impl Marker {
-    /// Every marker, in the order the documentation lists them.
-    pub const ALL: [Self; 3] = [Self::Dot, Self::RingedDot, Self::Diamond];
+impl Mark {
+    /// Brackets and points are ASCII in every set; slants are `/ \` in ASCII.
+    pub(crate) const fn glyph(self, glyphs: GlyphSet) -> char {
+        match self {
+            Self::Rising => glyphs.pick('╱', '/'),
+            Self::Falling => glyphs.pick('╲', '\\'),
+            Self::LeftArc => '(',
+            Self::RightArc => ')',
+            Self::LeftPoint => '<',
+            Self::RightPoint => '>',
+        }
+    }
 }
 
 /// A mark and the cell it goes on.
@@ -93,11 +87,48 @@ pub(crate) struct Placed {
     pub(crate) mark: Mark,
 }
 
+/// Everything that tells a shape apart: its corners, its inset, its left and right columns and what it draws inside.
+#[derive(Debug, Clone, Copy)]
+struct Outline {
+    corner: Corner,
+    inset: Inset,
+    left: Side,
+    right: Side,
+    inner: Inner,
+}
+
+/// What an outline draws on its left or right column, row by row; a row without a mark keeps the frame's line.
+#[derive(Debug, Clone, Copy)]
+enum Side {
+    /// The frame's line on every row.
+    Line,
+    /// `mark` on every row but the top and the bottom one.
+    Between(Mark),
+    /// `top` on the top row, `bottom` on the bottom one.
+    Ends { top: Mark, bottom: Mark },
+    /// `upper` above the middle, `middle` on the middle row, `lower` below it: a side pointing at its middle.
+    Pointed { upper: Mark, middle: Mark, lower: Mark },
+    /// `mark` on every row.
+    Every(Mark),
+}
+
+/// What an outline draws inside its border.
+#[derive(Debug, Clone, Copy)]
+enum Inner {
+    Nothing,
+    /// A line down each side, one column in.
+    SideLines,
+    /// A line across, one row under the top.
+    LineUnderTop,
+    /// A second bracket inside each side, between the top and the bottom row.
+    SecondBrackets,
+}
+
 impl Shape {
     /// Every shape, in the order the documentation lists them.
     pub const ALL: [Self; 14] = [
         Self::Rectangle,
-        Self::Rounded,
+        Self::RoundedRectangle,
         Self::Stadium,
         Self::Circle,
         Self::DoubleCircle,
@@ -114,129 +145,92 @@ impl Shape {
 
     /// The columns and rows the outline takes inside its rectangle.
     pub fn inset(self) -> Inset {
-        let side = if matches!(self, Self::Circle | Self::DoubleCircle | Self::Subroutine) { 2 } else { 1 };
-        let top = if self == Self::Cylinder { 2 } else { 1 };
-        Inset { side, top, bottom: 1 }
+        self.outline().inset
     }
 
     pub(crate) fn corner(self) -> Corner {
+        self.outline().corner
+    }
+
+    fn outline(self) -> Outline {
+        const THIN: Inset = Inset { sides: 1, top: 1, bottom: 1 };
+        const WIDE: Inset = Inset { sides: 2, top: 1, bottom: 1 };
+        let square = |left, right| Outline { corner: Corner::Square, inset: THIN, left, right, inner: Inner::Nothing };
+        let arcs = Side::Between(Mark::LeftArc);
+        let closing_arcs = Side::Between(Mark::RightArc);
+        let rounded = Outline { corner: Corner::Rounded, inset: THIN, left: Side::Line, right: Side::Line, inner: Inner::Nothing };
         match self {
-            Self::Rounded | Self::Stadium | Self::Circle | Self::DoubleCircle | Self::Cylinder => Corner::Rounded,
-            _ => Corner::Square,
+            Self::Rectangle => square(Side::Line, Side::Line),
+            Self::RoundedRectangle => rounded,
+            Self::Stadium => Outline { left: arcs, right: closing_arcs, ..rounded },
+            Self::Circle => Outline { inset: WIDE, left: arcs, right: closing_arcs, ..rounded },
+            Self::DoubleCircle => Outline { inset: WIDE, left: arcs, right: closing_arcs, inner: Inner::SecondBrackets, ..rounded },
+            Self::Subroutine => Outline { inset: WIDE, inner: Inner::SideLines, ..square(Side::Line, Side::Line) },
+            Self::Cylinder => Outline { inset: Inset { top: 2, ..THIN }, inner: Inner::LineUnderTop, ..rounded },
+            Self::Diamond => {
+                square(Side::Ends { top: Mark::Rising, bottom: Mark::Falling }, Side::Ends { top: Mark::Falling, bottom: Mark::Rising })
+            }
+            Self::Hexagon => square(
+                Side::Pointed { upper: Mark::Rising, middle: Mark::LeftPoint, lower: Mark::Falling },
+                Side::Pointed { upper: Mark::Falling, middle: Mark::RightPoint, lower: Mark::Rising },
+            ),
+            Self::LeanRight => square(Side::Every(Mark::Rising), Side::Every(Mark::Rising)),
+            Self::LeanLeft => square(Side::Every(Mark::Falling), Side::Every(Mark::Falling)),
+            Self::Trapezoid => square(Side::Every(Mark::Rising), Side::Every(Mark::Falling)),
+            Self::InvertedTrapezoid => square(Side::Every(Mark::Falling), Side::Every(Mark::Rising)),
+            Self::Asymmetric => square(Side::Pointed { upper: Mark::Falling, middle: Mark::RightPoint, lower: Mark::Rising }, Side::Line),
         }
     }
 
     /// Lines inside the border: down each side of a subroutine, under the top of a cylinder.
-    pub(crate) fn inner_lines(self, rect: Rect) -> Vec<[Point; 2]> {
-        let edges = Edges::of(rect);
-        match self {
-            Self::Subroutine if rect.width > 2 => vec![
-                [Point::new(edges.left.saturating_add(1), edges.top), Point::new(edges.left.saturating_add(1), edges.bottom)],
-                [Point::new(edges.right - 1, edges.top), Point::new(edges.right - 1, edges.bottom)],
+    pub(crate) fn inner_lines(self, border: Border) -> Vec<[Point; 2]> {
+        let Border { left, top, right, bottom, width, height } = border;
+        match self.outline().inner {
+            Inner::SideLines if width > 2 => vec![
+                [Point::new(left.saturating_add(1), top), Point::new(left.saturating_add(1), bottom)],
+                [Point::new(right - 1, top), Point::new(right - 1, bottom)],
             ],
-            Self::Cylinder if rect.height > 2 => {
-                vec![[Point::new(edges.left, edges.top.saturating_add(1)), Point::new(edges.right, edges.top.saturating_add(1))]]
-            }
-            _ => Vec::new(),
+            Inner::LineUnderTop if height > 2 => vec![[Point::new(left, top.saturating_add(1)), Point::new(right, top.saturating_add(1))]],
+            Inner::Nothing | Inner::SideLines | Inner::LineUnderTop | Inner::SecondBrackets => Vec::new(),
         }
     }
 
     /// The marks replacing border cells, with a double circle's second bracket.
-    pub(crate) fn marks(self, rect: Rect) -> Vec<Placed> {
-        let edges = Edges::of(rect);
-        let inner = (self == Self::DoubleCircle && rect.width > 2).then(|| Edges {
-            left: edges.left.saturating_add(1),
-            right: edges.right - 1,
-            ..edges
-        });
-        (0..rect.height)
+    pub(crate) fn marks(self, border: Border) -> Vec<Placed> {
+        let outline = self.outline();
+        let second = matches!(outline.inner, Inner::SecondBrackets) && border.width > 2;
+        (0..border.height)
             .flat_map(|row| {
-                let y = edges.top.saturating_add(row);
-                let outer = [
-                    self.left(row, rect.height).map(|mark| Placed { at: Point::new(edges.left, y), mark }),
-                    self.right(row, rect.height).map(|mark| Placed { at: Point::new(edges.right, y), mark }),
-                ];
-                let second = inner.filter(|_| is_inside(row, rect.height)).map(|inner| {
-                    [
-                        Placed { at: Point::new(inner.left, y), mark: Mark::LeftArc },
-                        Placed { at: Point::new(inner.right, y), mark: Mark::RightArc },
-                    ]
+                let y = border.top.saturating_add(row);
+                let on = |x, side: Side| side.mark(row, border.height).map(|mark| Placed { at: Point::new(x, y), mark });
+                let outer = [on(border.left, outline.left), on(border.right, outline.right)];
+                let inner = second.then(|| {
+                    [on(border.left.saturating_add(1), Side::Between(Mark::LeftArc)), on(border.right - 1, Side::Between(Mark::RightArc))]
                 });
-                outer.into_iter().flatten().chain(second.into_iter().flatten())
+                outer.into_iter().chain(inner.into_iter().flatten()).flatten()
             })
             .collect()
     }
+}
 
-    /// The mark on the left border at `row` of `height`, `None` where the border is a line.
-    fn left(self, row: u16, height: u16) -> Option<Mark> {
+impl Side {
+    /// The mark at `row` of a side `height` rows tall, `None` where the side is the frame's line.
+    fn mark(self, row: u16, height: u16) -> Option<Mark> {
+        let inside = row > 0 && row + 1 < height;
         match self {
-            Self::Rectangle | Self::Rounded | Self::Subroutine | Self::Cylinder => None,
-            Self::Stadium | Self::Circle | Self::DoubleCircle => is_inside(row, height).then_some(Mark::LeftArc),
-            Self::Diamond if row == 0 => Some(Mark::Rising),
-            Self::Diamond if row + 1 == height => Some(Mark::Falling),
-            Self::Diamond => None,
-            Self::Hexagon => Some(pointed(row, height, [Mark::Rising, Mark::LeftPoint, Mark::Falling])),
-            Self::Asymmetric => Some(pointed(row, height, [Mark::Falling, Mark::RightPoint, Mark::Rising])),
-            Self::LeanRight | Self::Trapezoid => Some(Mark::Rising),
-            Self::LeanLeft | Self::InvertedTrapezoid => Some(Mark::Falling),
+            Self::Line => None,
+            Self::Between(mark) => inside.then_some(mark),
+            Self::Ends { top, .. } if row == 0 => Some(top),
+            Self::Ends { bottom, .. } if row + 1 == height => Some(bottom),
+            Self::Ends { .. } => None,
+            Self::Pointed { upper, middle, lower } => Some(pointed(row, height, [upper, middle, lower])),
+            Self::Every(mark) => Some(mark),
         }
     }
-
-    /// The left border mirrored, except where the shape is not symmetric.
-    fn right(self, row: u16, height: u16) -> Option<Mark> {
-        match self {
-            Self::LeanRight => Some(Mark::Rising),
-            Self::LeanLeft => Some(Mark::Falling),
-            Self::Asymmetric => None,
-            _ => self.left(row, height).map(Mark::mirrored),
-        }
-    }
-}
-
-impl Mark {
-    const fn mirrored(self) -> Self {
-        match self {
-            Self::Rising => Self::Falling,
-            Self::Falling => Self::Rising,
-            Self::LeftArc => Self::RightArc,
-            Self::RightArc => Self::LeftArc,
-            Self::LeftPoint => Self::RightPoint,
-            Self::RightPoint => Self::LeftPoint,
-            Self::Marker(marker) => Self::Marker(marker),
-            Self::Tip(tip, Direction::Left) => Self::Tip(tip, Direction::Right),
-            Self::Tip(tip, Direction::Right) => Self::Tip(tip, Direction::Left),
-            Self::Tip(tip, direction) => Self::Tip(tip, direction),
-        }
-    }
-}
-
-/// The columns and rows of a rectangle's border.
-#[derive(Debug, Clone, Copy)]
-struct Edges {
-    left: u16,
-    top: u16,
-    right: u16,
-    bottom: u16,
-}
-
-impl Edges {
-    fn of(rect: Rect) -> Self {
-        Self {
-            left: rect.x,
-            top: rect.y,
-            right: rect.x.saturating_add(rect.width.saturating_sub(1)),
-            bottom: rect.y.saturating_add(rect.height.saturating_sub(1)),
-        }
-    }
-}
-
-/// Between the top and bottom rows.
-fn is_inside(row: u16, height: u16) -> bool {
-    row > 0 && row + 1 < height
 }
 
 /// `[upper, middle, lower]`: the side slants out to a point at its middle row, between two rows when there is none.
-fn pointed(row: u16, height: u16, [upper, middle, lower]: [Mark; 3]) -> Mark {
+const fn pointed(row: u16, height: u16, [upper, middle, lower]: [Mark; 3]) -> Mark {
     if height % 2 == 1 && row == height / 2 {
         middle
     } else if row < height / 2 {
@@ -250,7 +244,7 @@ fn pointed(row: u16, height: u16, [upper, middle, lower]: [Mark; 3]) -> Mark {
 mod tests {
     use super::*;
     use crate::role::tests::Part;
-    use crate::{Canvas, Direction, GlyphSet, LineKind};
+    use crate::{Canvas, Direction, GlyphSet, LineKind, Rect, Tip};
 
     fn render(canvas: &Canvas<Part>, glyphs: GlyphSet) -> String {
         canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect::<String>()).collect::<Vec<_>>().join("\n")
@@ -259,11 +253,11 @@ mod tests {
     /// The shape around a `Label` with a space on each side, as a flowchart node.
     fn node(shape: Shape, label_rows: u16) -> Canvas<Part> {
         let inset = shape.inset();
-        let (width, height) = (5 + 2 + 2 * inset.side, label_rows + inset.top + inset.bottom);
+        let (width, height) = (5 + 2 + 2 * inset.sides, label_rows + inset.top + inset.bottom);
         let mut canvas = Canvas::<Part>::new(width, height).unwrap();
         canvas.shape(Rect::new(0, 0, width, height), shape, Part::Node);
         for row in 0..label_rows {
-            canvas.text(Point::new(inset.side + 1, inset.top + row), "Label", Part::Label);
+            canvas.text(Point::new(inset.sides + 1, inset.top + row), "Label", Part::Label);
         }
         canvas
     }
@@ -271,7 +265,7 @@ mod tests {
     /// Each shape with a line joining the middle of each side, the left and right ones ending on the border.
     fn joined(shape: Shape) -> Canvas<Part> {
         let inset = shape.inset();
-        let rect = Rect::new(3, 2, 5 + 2 + 2 * inset.side, 1 + inset.top + inset.bottom);
+        let rect = Rect::new(3, 2, 5 + 2 + 2 * inset.sides, 1 + inset.top + inset.bottom);
         let (middle_x, middle_y) = (rect.x + rect.width / 2, rect.y + inset.top);
         let (right, bottom) = (rect.x + rect.width - 1, rect.y + rect.height - 1);
         let mut canvas = Canvas::<Part>::new(rect.width + 6, rect.height + 4).unwrap();

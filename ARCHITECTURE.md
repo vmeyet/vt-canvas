@@ -23,15 +23,17 @@ This page says how the code is laid out today; when a module or a boundary chang
 
 | Module | Holds |
 |---|---|
-| `canvas` | `Canvas`, its cells and their backgrounds, `Corner`, `Run`, `Error` and the size limits |
+| `canvas` | `Canvas`, its cells and their backgrounds, `Run`, `Error` and the size limits |
+| `frame` | `Corner`: the corners of a frame |
 | `role` | `Role`: what the canvas asks of the caller's role type, its ASCII texture |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
-| `glyph` | `GlyphSet`: the character for a cell's sides, a tip, a shape's mark or a filled cell, junction tables included |
+| `glyph` | `GlyphSet`: the character for a cell's sides or a filled cell, junction tables included |
 | `block` | A cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, the cells a stretch covers, and how much of a cell a glyph covers |
 | `pixel` | `Dots`, `Pixel`: the dots of a cell and their glyph in each set, the two halves of a half-block cell, and the dots of a straight line |
 | `wedge` | `Wedge`, `Fill`: a cell filled under or over a slanted edge, its glyph in each set |
-| `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines; `Marker`, a node on one cell |
-| `tip` | `Tip`: what an edge draws where it meets a node, an arrow, a cross, a class relation's head or a crow's foot's part |
+| `shape` | `Shape`, `Inset`: each shape's outline in one place, which border cells are slants or brackets instead of lines, and their glyphs |
+| `symbol` | `Symbol`: a node on one cell, and its glyph |
+| `tip` | `Tip`: what an edge draws where it meets a node, an arrow, a cross, a class relation's head or a crow's foot's part, and its glyph |
 | `text` | Which characters a cell can hold and how wide they are |
 | `geometry` | `Point`, `Rect`, `Direction` |
 
@@ -139,7 +141,7 @@ A cell holding a block under half on a background shows the background's charact
 The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy or double, `.` when dashed, and a vertical run as `|`, `:` when dashed.
 A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still differs from a square one.
 Slants are `/ \`; brackets and points are the same in both sets.
-`Canvas::marker` draws a node too small for an outline on one cell, kept under a line the same way: `Marker::Dot` `⬤`, `Marker::RingedDot` `◉` and `Marker::Diamond` `⬥`, `*`, `@` and `?` in ASCII; `●` and `◇` would be East Asian ambiguous.
+`Canvas::symbol` draws a node too small for an outline on one cell, kept under a line the same way: `Symbol::Dot` `⬤`, `Symbol::RingedDot` `◉` and `Symbol::FilledDiamond` `⬥`, `*`, `@` and `?` in ASCII; `●` and `◆` would be East Asian ambiguous.
 `Canvas::tip` draws an edge's end on one cell, facing the node it goes into, kept under a line the same way, so an edge drawn later does not cut it: `Tip::Arrow` `▸ ◂ ▴ ▾`, `Tip::Triangle` `▹ ◃ ▵ ▿`, `Tip::Diamond` `⬦`, `Tip::FilledDiamond` `⬥`, `Tip::Ring` `o`, `Tip::Fork` `< > Ʌ V`, opening onto the node, and `Tip::Cross` `╳`; in ASCII `> < ^ v` for both triangles, `o`, `#` (not `*`, a multiplicity), `o`, `< > ^ v` and `x`.
 `Tip::Bar` is a line across the edge instead, merged with it into `┼` (`+`).
 `△ ▷ ◇ ◆ ○` would be East Asian ambiguous.
