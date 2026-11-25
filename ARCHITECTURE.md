@@ -95,5 +95,5 @@ mrk measures text with its own helper over the same crate; vt-canvas exposes `wi
 
 ## Fuzzing and properties
 
-- `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames and arrows, then checks that every row is exactly the canvas's width.
+- `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames, arrows and shapes, then checks that every row is exactly the canvas's width.
 - The proptest properties in `canvas` keep the same check in `cargo test`, plus a line drawn from either end, a line drawn twice, and a path drawn as its lines.

@@ -5,7 +5,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use unicode_width::UnicodeWidthChar;
-use vt_canvas::{Canvas, Corner, Direction, Frame, GlyphSet, LineKind, Point, Rect, Role};
+use vt_canvas::{Canvas, Corner, Direction, Frame, GlyphSet, LineKind, Point, Rect, Role, Shape};
 
 /// Wide enough to reach every clipping branch, small enough to keep each run fast.
 const MAX_SIDE: u16 = 64;
@@ -28,6 +28,7 @@ enum Operation {
     Path { points: Vec<(u16, u16)>, kind: u8, role: u8 },
     Frame { rect: (u16, u16, u16, u16), kind: u8, rounded: bool, title: Option<String>, role: u8 },
     Arrow { at: (u16, u16), direction: u8, role: u8 },
+    Shape { rect: (u16, u16, u16, u16), shape: u8, role: u8 },
 }
 
 fuzz_target!(|drawing: Drawing| {
@@ -61,14 +62,21 @@ fn apply(canvas: &mut Canvas, operation: &Operation) {
         Operation::Frame { rect, kind, rounded, title, role } => {
             let corner = if *rounded { Corner::Rounded } else { Corner::Square };
             let frame = Frame { kind: line_kind(*kind), corner, title: title.as_deref(), role: self::role(*role) };
-            canvas.frame(Rect::new(coordinate(rect.0), coordinate(rect.1), coordinate(rect.2), coordinate(rect.3)), frame);
+            canvas.frame(self::rect(*rect), frame);
         }
         Operation::Arrow { at, direction, role } => canvas.arrow(point(*at), self::direction(*direction), self::role(*role)),
+        Operation::Shape { rect, shape, role } => {
+            canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], self::role(*role))
+        }
     }
 }
 
 fn point((x, y): (u16, u16)) -> Point {
     Point::new(coordinate(x), coordinate(y))
+}
+
+fn rect((x, y, width, height): (u16, u16, u16, u16)) -> Rect {
+    Rect::new(coordinate(x), coordinate(y), coordinate(width), coordinate(height))
 }
 
 fn coordinate(value: u16) -> u16 {
