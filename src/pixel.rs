@@ -1,7 +1,8 @@
 use crate::block::Cover;
-use crate::canvas::{Role, Styled};
+use crate::canvas::Styled;
 use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
+use crate::role::Role;
 
 /// A dot on the grid [`Dots`] cuts the cells into: `x` counts dots from the left of the canvas, `y` from its top.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,7 +31,7 @@ pub enum Dots {
     Octant,
     /// 2 by 3 square dots, Unicode 13; a set without them draws [`Quadrant`](Self::Quadrant).
     Sextant,
-    /// 2 by 2 square dots, `▘ ▚ ▟`; ASCII draws `'` for the upper two, `.` for the lower two and `:` for both, and `" , ;` for every other series.
+    /// 2 by 2 square dots, `▘ ▚ ▟`; ASCII draws `'` for the upper two, `.` for the lower two and `:` for both, and `" , ;` for an odd [`texture`](crate::Role::texture).
     Quadrant,
     /// 1 by 2 dots, `▀ ▄ █`, the upper one drawn on the lower one's role: the one kind with two roles in a cell.
     HalfBlock,
@@ -60,19 +61,19 @@ impl Dots {
     }
 
     /// The glyph for the dots `lit` in a cell, or the closest one `glyphs` holds.
-    pub(crate) fn glyph(self, lit: u8, role: Role, glyphs: GlyphSet) -> char {
+    pub(crate) fn glyph(self, lit: u8, texture: u8, glyphs: GlyphSet) -> char {
         match (self, glyphs) {
             (_, _) if lit == 0 => ' ',
-            (Self::Braille, GlyphSet::Ascii) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), role, glyphs),
+            (Self::Braille, GlyphSet::Ascii) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), texture, glyphs),
             (Self::Braille, _) => braille(lit),
             (Self::Octant, GlyphSet::Unicode) => octant(lit),
             (Self::Octant, GlyphSet::Unicode13) => sextant(regrid(lit, &[0, 1, 1, 2])),
-            (Self::Octant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), role, glyphs),
+            (Self::Octant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), texture, glyphs),
             (Self::Sextant, GlyphSet::Unicode | GlyphSet::Unicode13) => sextant(lit),
-            (Self::Sextant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 1, 1]), role, glyphs),
-            (Self::Quadrant, GlyphSet::Ascii) => ascii(lit, role),
+            (Self::Sextant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 1, 1]), texture, glyphs),
+            (Self::Quadrant, GlyphSet::Ascii) => ascii(lit, texture),
             (Self::Quadrant, _) => QUADRANTS[usize::from(lit & 0b1111)],
-            (Self::HalfBlock, _) => Self::Quadrant.glyph([0b0000, 0b0011, 0b1100, 0b1111][usize::from(lit & 0b11)], role, glyphs),
+            (Self::HalfBlock, _) => Self::Quadrant.glyph([0b0000, 0b0011, 0b1100, 0b1111][usize::from(lit & 0b11)], texture, glyphs),
         }
     }
 }
@@ -143,12 +144,9 @@ fn braille(lit: u8) -> char {
     char::from_u32(0x2800 + pattern).unwrap_or(' ')
 }
 
-/// The upper dots, the lower dots and both; every other series has the second three, so two lines differ without colour.
-const fn ascii(quadrants: u8, role: Role) -> char {
-    let [upper, lower, both] = match role {
-        Role::Series(series) if series % 2 == 1 => ['"', ',', ';'],
-        _ => ['\'', '.', ':'],
-    };
+/// The upper dots, the lower dots and both; an odd texture has the second three, so two lines differ without colour.
+const fn ascii(quadrants: u8, texture: u8) -> char {
+    let [upper, lower, both] = if texture % 2 == 1 { ['"', ',', ';'] } else { ['\'', '.', ':'] };
     match (quadrants & 0b0011 != 0, quadrants & 0b1100 != 0) {
         (false, false) => ' ',
         (true, false) => upper,
@@ -158,19 +156,25 @@ const fn ascii(quadrants: u8, role: Role) -> char {
 }
 
 /// The two dots of a [`Dots::HalfBlock`] cell, each with the role that lit it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) struct Halves {
-    top: Option<Role>,
-    bottom: Option<Role>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Halves<R> {
+    top: Option<R>,
+    bottom: Option<R>,
 }
 
-impl Halves {
-    pub(crate) const fn lit(self, bit: u8, role: Role) -> Self {
+impl<R> Default for Halves<R> {
+    fn default() -> Self {
+        Self { top: None, bottom: None }
+    }
+}
+
+impl<R: Role> Halves<R> {
+    pub(crate) fn lit(self, bit: u8, role: R) -> Self {
         if bit == 0b01 { Self { top: Some(role), ..self } } else { Self { bottom: Some(role), ..self } }
     }
 
     /// One half lit is a block half a cell tall, so it may stay behind what is drawn over it.
-    pub(crate) const fn cover(self) -> Option<Cover> {
+    pub(crate) fn cover(self) -> Option<Cover> {
         let half = Cover::WHOLE / 2;
         match (self.top, self.bottom) {
             (None, None) => None,
@@ -181,23 +185,25 @@ impl Halves {
     }
 
     /// The role that stays behind a drawing over the cell: the lower half's, when both are lit.
-    pub(crate) const fn lowest(self) -> Option<Role> {
+    pub(crate) fn lowest(self) -> Option<R> {
         if self.bottom.is_some() { self.bottom } else { self.top }
     }
 
-    pub(crate) const fn fills_cell(self) -> bool {
+    pub(crate) fn fills_cell(self) -> bool {
         self.top.is_some() && self.bottom.is_some()
     }
 
     /// Two roles in a cell are the upper half drawn on the lower one's role; ASCII fills the cell as the upper one.
-    pub(crate) fn styled(self, ground: Option<Role>, glyphs: GlyphSet) -> Styled {
+    pub(crate) fn styled(self, ground: Option<R>, glyphs: GlyphSet) -> Styled<R> {
         let ascii = glyphs == GlyphSet::Ascii;
         match (self.top, self.bottom) {
-            (Some(top), Some(bottom)) if top == bottom => Styled { char: glyphs.fill(top), role: top, background: None },
-            (Some(top), Some(bottom)) => Styled { char: if ascii { glyphs.fill(top) } else { '▀' }, role: top, background: Some(bottom) },
+            (Some(top), Some(bottom)) if top == bottom => Styled { char: glyphs.fill(top.texture()), role: top, background: None },
+            (Some(top), Some(bottom)) => {
+                Styled { char: if ascii { glyphs.fill(top.texture()) } else { '▀' }, role: top, background: Some(bottom) }
+            }
             (Some(top), None) => Styled { char: if ascii { '\'' } else { '▀' }, role: top, background: ground },
             (None, Some(bottom)) => Styled { char: if ascii { '.' } else { '▄' }, role: bottom, background: ground },
-            (None, None) => Styled { char: ' ', role: Role::Plain, background: ground },
+            (None, None) => Styled { char: ' ', role: R::default(), background: ground },
         }
     }
 }
@@ -228,18 +234,18 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::canvas::Canvas;
-    use crate::canvas::Role as Part;
+    use crate::role::tests::Part;
 
     const ALL_DOTS: [Dots; 5] = [Dots::Braille, Dots::Octant, Dots::Sextant, Dots::Quadrant, Dots::HalfBlock];
     const SETS: [GlyphSet; 4] = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
 
     pub(crate) fn every_glyph() -> Vec<char> {
-        ALL_DOTS.into_iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, Part::Plain, GlyphSet::Unicode))).collect()
+        ALL_DOTS.into_iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, 0, GlyphSet::Unicode))).collect()
     }
 
     /// A ring and a line through it, so every slope and every dot of a cell is used.
-    fn drawing(dots: Dots) -> Canvas {
-        let mut canvas = Canvas::new(16, 5).unwrap();
+    fn drawing(dots: Dots) -> Canvas<Part> {
+        let mut canvas = Canvas::<Part>::new(16, 5).unwrap();
         let (width, height) = (16.0 * f64::from(dots.across()) - 1.0, 5.0 * f64::from(dots.down()) - 1.0);
         let on_ring = |step: u32| {
             let angle = f64::from(step) * std::f64::consts::TAU / 48.0;
@@ -290,8 +296,7 @@ pub(crate) mod tests {
     #[test]
     fn every_pattern_of_dots_has_a_glyph_of_its_own() {
         for (dots, patterns) in [(Dots::Braille, 256), (Dots::Octant, 256), (Dots::Sextant, 64), (Dots::Quadrant, 16)] {
-            let glyphs: std::collections::BTreeSet<char> =
-                (0..patterns).map(|lit| dots.glyph(lit as u8, Part::Plain, GlyphSet::Unicode)).collect();
+            let glyphs: std::collections::BTreeSet<char> = (0..patterns).map(|lit| dots.glyph(lit as u8, 0, GlyphSet::Unicode)).collect();
 
             assert_eq!(glyphs.len(), patterns, "{dots:?}");
         }
@@ -317,14 +322,14 @@ pub(crate) mod tests {
         let top_left_and_bottom_right = 0b1000_0001;
 
         let drawn = [GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii]
-            .map(|glyphs| Dots::Octant.glyph(top_left_and_bottom_right, Part::Plain, glyphs));
+            .map(|glyphs| Dots::Octant.glyph(top_left_and_bottom_right, 0, glyphs));
 
         assert_eq!(drawn, ['\u{1FB1F}', '▚', ':']);
     }
 
     #[test]
-    fn ascii_draws_every_other_series_with_dots_of_its_own() {
-        let drawn = |series| [0b0001, 0b1000, 0b1001].map(|dots| Dots::Quadrant.glyph(dots, Part::Series(series), GlyphSet::Ascii));
+    fn ascii_draws_every_other_texture_with_dots_of_its_own() {
+        let drawn = |texture| [0b0001, 0b1000, 0b1001].map(|dots| Dots::Quadrant.glyph(dots, texture, GlyphSet::Ascii));
 
         assert_eq!([drawn(0), drawn(1), drawn(2)], [['\'', '.', ':'], ['"', ',', ';'], ['\'', '.', ':']]);
     }

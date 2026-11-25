@@ -7,14 +7,25 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for what it owns and [`AGENTS.md`](AGEN
 ```rust
 use vt_canvas::{Canvas, Corner, Direction, Frame, GlyphSet, LineKind, Point, Rect, Role};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Part {
+    #[default]
+    Plain,
+    Node,
+    Edge,
+    Label,
+}
+
+impl Role for Part {}
+
 let mut canvas = Canvas::new(14, 3)?;
-let node = Frame { kind: LineKind::Light, corner: Corner::Rounded, title: None, role: Role::Node };
+let node = Frame { kind: LineKind::Light, corner: Corner::Rounded, title: None, role: Part::Node };
 canvas.frame(Rect::new(0, 0, 5, 3), node);
-canvas.text(Point::new(2, 1), "A", Role::Label);
-canvas.line(Point::new(4, 1), Point::new(7, 1), LineKind::Light, Role::Edge)?;
-canvas.arrow(Point::new(8, 1), Direction::Right, Role::Edge);
+canvas.text(Point::new(2, 1), "A", Part::Label);
+canvas.line(Point::new(4, 1), Point::new(7, 1), LineKind::Light, Part::Edge)?;
+canvas.arrow(Point::new(8, 1), Direction::Right, Part::Edge);
 canvas.frame(Rect::new(9, 0, 5, 3), node);
-canvas.text(Point::new(11, 1), "B", Role::Label);
+canvas.text(Point::new(11, 1), "B", Part::Label);
 
 let rows: Vec<String> = canvas.rows(GlyphSet::Unicode).map(|runs| runs.into_iter().map(|run| run.text).collect()).collect();
 assert_eq!(rows, ["╭───╮    ╭───╮", "│ A ├───▸│ B │", "╰───╯    ╰───╯"]);

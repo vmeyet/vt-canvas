@@ -252,18 +252,18 @@ fn pointed(row: u16, height: u16, [upper, middle, lower]: [Mark; 3]) -> Mark {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::canvas::Role as Part;
+    use crate::role::tests::Part;
     use crate::{Canvas, Direction, GlyphSet, LineKind};
 
-    fn render(canvas: &Canvas, glyphs: GlyphSet) -> String {
+    fn render(canvas: &Canvas<Part>, glyphs: GlyphSet) -> String {
         canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect::<String>()).collect::<Vec<_>>().join("\n")
     }
 
     /// The shape around a `Label` with a space on each side, as a flowchart node.
-    fn node(shape: Shape, label_rows: u16) -> Canvas {
+    fn node(shape: Shape, label_rows: u16) -> Canvas<Part> {
         let inset = shape.inset();
         let (width, height) = (5 + 2 + 2 * inset.side, label_rows + inset.top + inset.bottom);
-        let mut canvas = Canvas::new(width, height).unwrap();
+        let mut canvas = Canvas::<Part>::new(width, height).unwrap();
         canvas.shape(Rect::new(0, 0, width, height), shape, Part::Node);
         for row in 0..label_rows {
             canvas.text(Point::new(inset.side + 1, inset.top + row), "Label", Part::Label);
@@ -272,12 +272,12 @@ mod tests {
     }
 
     /// Each shape with a line joining the middle of each side, the left and right ones ending on the border.
-    fn joined(shape: Shape) -> Canvas {
+    fn joined(shape: Shape) -> Canvas<Part> {
         let inset = shape.inset();
         let rect = Rect::new(3, 2, 5 + 2 + 2 * inset.side, 1 + inset.top + inset.bottom);
         let (middle_x, middle_y) = (rect.x + rect.width / 2, rect.y + inset.top);
         let (right, bottom) = (rect.x + rect.width - 1, rect.y + rect.height - 1);
-        let mut canvas = Canvas::new(rect.width + 6, rect.height + 4).unwrap();
+        let mut canvas = Canvas::<Part>::new(rect.width + 6, rect.height + 4).unwrap();
         canvas.shape(rect, shape, Part::Node);
         for (from, to) in [
             (Point::new(middle_x, 0), Point::new(middle_x, rect.y)),
@@ -290,7 +290,7 @@ mod tests {
         canvas
     }
 
-    fn every_shape(draw: impl Fn(Shape) -> Canvas, glyphs: GlyphSet) -> String {
+    fn every_shape(draw: impl Fn(Shape) -> Canvas<Part>, glyphs: GlyphSet) -> String {
         Shape::ALL.iter().map(|&shape| format!("{shape:?}\n{}", render(&draw(shape), glyphs))).collect::<Vec<_>>().join("\n\n")
     }
 
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn a_shape_past_the_last_cell_draws_nothing() {
         for shape in Shape::ALL {
-            let mut canvas = Canvas::new(2, 2).unwrap();
+            let mut canvas = Canvas::<Part>::new(2, 2).unwrap();
 
             canvas.shape(Rect::new(u16::MAX, u16::MAX, 5, 5), shape, Part::Node);
 
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn a_line_ending_on_a_slant_leaves_it_whole() {
-        let mut canvas = Canvas::new(8, 3).unwrap();
+        let mut canvas = Canvas::<Part>::new(8, 3).unwrap();
         canvas.shape(Rect::new(3, 0, 5, 3), Shape::Hexagon, Part::Node);
 
         canvas.line(Point::new(0, 1), Point::new(3, 1), LineKind::Light, Part::Edge).unwrap();
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn an_empty_rectangle_draws_nothing() {
-        let mut canvas = Canvas::new(2, 2).unwrap();
+        let mut canvas = Canvas::<Part>::new(2, 2).unwrap();
 
         canvas.shape(Rect::new(0, 0, 0, 2), Shape::Hexagon, Part::Node);
         canvas.shape(Rect::new(0, 0, 2, 0), Shape::DoubleCircle, Part::Node);
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn a_shape_leaving_the_canvas_is_clipped() {
-        let mut canvas = Canvas::new(3, 2).unwrap();
+        let mut canvas = Canvas::<Part>::new(3, 2).unwrap();
 
         canvas.shape(Rect::new(1, 1, u16::MAX, u16::MAX), Shape::Trapezoid, Part::Node);
 

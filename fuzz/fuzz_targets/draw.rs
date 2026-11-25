@@ -5,7 +5,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use unicode_width::UnicodeWidthChar;
-use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, Frame, GlyphSet, LineKind, Pixel, Point, Rect, Role, Shape, Wedge};
+use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, Frame, GlyphSet, LineKind, Pixel, Point, Rect, Shape, Wedge};
 
 /// Wide enough to reach every clipping branch, small enough to keep each run fast.
 const MAX_SIDE: u16 = 64;
@@ -50,39 +50,39 @@ fuzz_target!(|drawing: Drawing| {
     }
 });
 
-fn apply(canvas: &mut Canvas, operation: &Operation) {
+fn apply(canvas: &mut Canvas<u8>, operation: &Operation) {
     match operation {
-        Operation::Text { at, text, role } => canvas.text(point(*at), text, self::role(*role)),
-        Operation::TextCut { at, text, max_width, role } => canvas.text_cut(point(*at), text, *max_width, self::role(*role)),
+        Operation::Text { at, text, role } => canvas.text(point(*at), text, *role),
+        Operation::TextCut { at, text, max_width, role } => canvas.text_cut(point(*at), text, *max_width, *role),
         Operation::Line { from, to, kind, role } => {
             let (from, to) = (point(*from), point(*to));
-            let refused = canvas.line(from, to, line_kind(*kind), self::role(*role)).is_err();
+            let refused = canvas.line(from, to, line_kind(*kind), *role).is_err();
             assert_eq!(refused, from.x != to.x && from.y != to.y);
         }
         Operation::Path { points, kind, role } => {
             let points: Vec<Point> = points.iter().copied().map(point).collect();
-            let refused = canvas.path(&points, line_kind(*kind), self::role(*role)).is_err();
+            let refused = canvas.path(&points, line_kind(*kind), *role).is_err();
             assert_eq!(refused, points.windows(2).any(|pair| pair[0].x != pair[1].x && pair[0].y != pair[1].y));
         }
         Operation::Frame { rect, kind, rounded, title, role } => {
             let corner = if *rounded { Corner::Rounded } else { Corner::Square };
-            let frame = Frame { kind: line_kind(*kind), corner, title: title.as_deref(), role: self::role(*role) };
+            let frame = Frame { kind: line_kind(*kind), corner, title: title.as_deref(), role: *role };
             canvas.frame(self::rect(*rect), frame);
         }
-        Operation::Arrow { at, direction, role } => canvas.arrow(point(*at), self::direction(*direction), self::role(*role)),
+        Operation::Arrow { at, direction, role } => canvas.arrow(point(*at), self::direction(*direction), *role),
         Operation::Shape { rect, shape, role } => {
-            canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], self::role(*role))
+            canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], *role)
         }
-        Operation::Column { x, eighths, role } => canvas.column(coordinate(*x), fine(eighths.0)..fine(eighths.1), self::role(*role)),
-        Operation::Row { y, eighths, role } => canvas.row(coordinate(*y), fine(eighths.0)..fine(eighths.1), self::role(*role)),
-        Operation::Stroke { x, eighth, role } => canvas.stroke(coordinate(*x), fine(*eighth), self::role(*role)),
+        Operation::Column { x, eighths, role } => canvas.column(coordinate(*x), fine(eighths.0)..fine(eighths.1), *role),
+        Operation::Row { y, eighths, role } => canvas.row(coordinate(*y), fine(eighths.0)..fine(eighths.1), *role),
+        Operation::Stroke { x, eighth, role } => canvas.stroke(coordinate(*x), fine(*eighth), *role),
         Operation::Wedge { at, left, right, above, role } => {
             let fill = if *above { Fill::Above } else { Fill::Below };
-            canvas.wedge(point(*at), Wedge { left: *left, right: *right, fill }, self::role(*role));
+            canvas.wedge(point(*at), Wedge { left: *left, right: *right, fill }, *role);
         }
         Operation::Segment { from, to, dots, role } => {
             let (from, to) = (Pixel::new(fine(from.0), fine(from.1)), Pixel::new(fine(to.0), fine(to.1)));
-            canvas.segment(from, to, self::dots(*dots), self::role(*role));
+            canvas.segment(from, to, self::dots(*dots), *role);
         }
     }
 }
@@ -102,10 +102,6 @@ fn coordinate(value: u16) -> u16 {
 /// Dots and eighths past `FAR` cells are folded back too, but for the last ones before `u32::MAX`.
 fn fine(value: u32) -> u32 {
     if value > u32::MAX - u32::from(FAR) { value } else { value % (u32::from(FAR) * 8) }
-}
-
-fn role(byte: u8) -> Role {
-    [Role::Plain, Role::Node, Role::Edge, Role::Label, Role::Group, Role::Axis, Role::Series(byte)][usize::from(byte) % 7]
 }
 
 fn dots(byte: u8) -> Dots {

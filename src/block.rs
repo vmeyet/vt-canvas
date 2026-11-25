@@ -1,8 +1,9 @@
 use std::ops::Range;
 
-use crate::canvas::{Role, Styled};
+use crate::canvas::Styled;
 use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
+use crate::role::Role;
 
 const EIGHTHS: u8 = 8;
 const HALF: u8 = EIGHTHS / 2;
@@ -102,14 +103,14 @@ impl Block {
         Cover { from: self.from, parts: self.eighths * (Cover::WHOLE / EIGHTHS) }
     }
 
-    pub(crate) fn styled(self, role: Role, ground: Option<Role>, glyphs: GlyphSet) -> Styled {
+    pub(crate) fn styled<R: Role>(self, role: R, ground: Option<R>, glyphs: GlyphSet) -> Styled<R> {
         if glyphs != GlyphSet::Ascii {
             return Styled { char: self.unicode(glyphs), role, background: ground };
         }
         match ground {
             // ASCII has one character for the cell: it shows whichever of the two fills more of it.
-            Some(ground) if !self.fills_half() => Styled { char: glyphs.fill(ground), role: ground, background: Some(role) },
-            _ => Styled { char: self.ascii(role), role, background: ground },
+            Some(ground) if !self.fills_half() => Styled { char: glyphs.fill(ground.texture()), role: ground, background: Some(role) },
+            _ => Styled { char: self.ascii(role.texture()), role, background: ground },
         }
     }
 
@@ -126,15 +127,15 @@ impl Block {
         match eighths {
             0 => ' ',
             1..EIGHTHS => table[usize::from(eighths) - 1],
-            _ => glyphs.fill(Role::Plain),
+            _ => glyphs.fill(0),
         }
     }
 
     /// Under half a cell, a mark on the side the block starts from, so a small value still shows.
-    pub(crate) fn ascii(self, role: Role) -> char {
+    pub(crate) const fn ascii(self, texture: u8) -> char {
         match self.from {
             _ if self.eighths == 0 => ' ',
-            _ if self.fills_half() => GlyphSet::Ascii.fill(role),
+            _ if self.fills_half() => GlyphSet::Ascii.fill(texture),
             Direction::Down => '_',
             Direction::Up => '"',
             Direction::Left | Direction::Right => '|',
@@ -175,7 +176,7 @@ pub(crate) fn span(eighths: Range<u32>, cells: usize, low_side: Direction) -> im
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::canvas::Role as Part;
+    use crate::role::tests::Part;
 
     const SETS: [GlyphSet; 4] = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
 

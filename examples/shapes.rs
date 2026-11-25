@@ -2,6 +2,17 @@
 
 use vt_canvas::{Canvas, Error, GlyphSet, Point, Rect, Role, Shape};
 
+/// The roles this drawing needs; a real caller maps each one to a colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Part {
+    #[default]
+    Plain,
+    Node,
+    Label,
+}
+
+impl Role for Part {}
+
 const COLUMNS: u16 = 3;
 /// Room for the widest name and its outline, with a gap.
 const CELL_WIDTH: u16 = 24;
@@ -19,7 +30,7 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn every_shape() -> Result<Canvas, Error> {
+fn every_shape() -> Result<Canvas<Part>, Error> {
     let rows = u16::try_from(Shape::ALL.len()).unwrap_or(u16::MAX).div_ceil(COLUMNS);
     let mut canvas = Canvas::new(COLUMNS * CELL_WIDTH, rows * CELL_HEIGHT)?;
     for (index, shape) in (0..).zip(Shape::ALL) {
@@ -29,11 +40,11 @@ fn every_shape() -> Result<Canvas, Error> {
 }
 
 /// The shape around its name, with a space on each side of it.
-fn node(canvas: &mut Canvas, at: Point, shape: Shape) {
+fn node(canvas: &mut Canvas<Part>, at: Point, shape: Shape) {
     let name = format!("{shape:?}");
     let inset = shape.inset();
     let name_width = u16::try_from(vt_canvas::width(&name)).unwrap_or(CELL_WIDTH);
     let rect = Rect::new(at.x, at.y, name_width + 2 + 2 * inset.side, 1 + inset.top + inset.bottom);
-    canvas.shape(rect, shape, Role::Node);
-    canvas.text(Point::new(at.x + inset.side + 1, at.y + inset.top), &name, Role::Label);
+    canvas.shape(rect, shape, Part::Node);
+    canvas.text(Point::new(at.x + inset.side + 1, at.y + inset.top), &name, Part::Label);
 }

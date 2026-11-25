@@ -1,7 +1,8 @@
 use crate::block::{Block, Cover};
-use crate::canvas::{Role, Styled};
+use crate::canvas::Styled;
 use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
+use crate::role::Role;
 
 const THIRDS: u8 = 3;
 
@@ -74,11 +75,11 @@ impl Wedge {
         Cover { from, parts: self.filled() * (Cover::WHOLE / (2 * THIRDS)) }
     }
 
-    pub(crate) fn styled(self, role: Role, ground: Option<Role>, glyphs: GlyphSet) -> Styled {
+    pub(crate) fn styled<R: Role>(self, role: R, ground: Option<R>, glyphs: GlyphSet) -> Styled<R> {
         let char = if glyphs.holds(GlyphSet::Unicode13) {
             self.unicode13()
         } else if glyphs == GlyphSet::Ascii {
-            self.ascii(role)
+            self.ascii(role.texture())
         } else {
             self.level().unicode(glyphs)
         };
@@ -93,11 +94,11 @@ impl Wedge {
         table[self.left() as usize][self.right() as usize]
     }
 
-    fn ascii(self, role: Role) -> char {
+    fn ascii(self, texture: u8) -> char {
         match self.left().cmp(&self.right()) {
             std::cmp::Ordering::Less => '/',
             std::cmp::Ordering::Greater => '\\',
-            std::cmp::Ordering::Equal => self.level().ascii(role),
+            std::cmp::Ordering::Equal => self.level().ascii(texture),
         }
     }
 
@@ -114,7 +115,7 @@ impl Wedge {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::canvas::Role as Part;
+    use crate::role::tests::Part;
 
     pub(crate) fn every_glyph() -> Vec<char> {
         [BELOW, ABOVE].concat().concat()

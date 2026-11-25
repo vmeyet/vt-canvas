@@ -23,7 +23,8 @@ This page says how the code is laid out today; when a module or a boundary chang
 
 | Module | Holds |
 |---|---|
-| `canvas` | `Canvas`, its cells and their backgrounds, `Frame`, `Role`, `Run`, `Error` and the size limits |
+| `canvas` | `Canvas`, its cells and their backgrounds, `Frame`, `Run`, `Error` and the size limits |
+| `role` | `Role`: what the canvas asks of the caller's role type, its ASCII texture |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
 | `glyph` | `GlyphSet`: the character for a cell's sides, an arrow, a shape's mark or a filled cell, junction tables included |
 | `block` | A cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, the cells a stretch covers, and how much of a cell a glyph covers |
@@ -45,11 +46,12 @@ This page says how the code is laid out today; when a module or a boundary chang
   Writing over either half of a wide character blanks the other half; a wide character without room for both halves is not drawn.
 - Text: control and zero-width characters are left out, so every row is exactly as wide as the canvas.
   `text_cut` cuts text to a width and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
-- Roles: `Plain`, `Node`, `Edge`, `Label`, `Group`, `Axis` and `Series(n)`, a chart's series counted from 0; the caller maps each one to a colour.
+- Roles: the caller's own type, `Canvas<R: Role>`; the canvas keeps one per cell and hands it back, the caller maps each one to a colour.
+  `Role` asks for `Copy + Eq + Default`, the default being the role of empty cells, and an ASCII `texture`, 0 unless told otherwise, so roles differ without colour; a `u8` is a role whose texture is itself.
 - Output: `rows` yields each row as runs of text sharing a role and a background, without `\n`.
   A run's `background` is the role behind its characters, `None` where nothing is.
 - Cost at the cell limit, measured on an Apple M5 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 4 ms and reads back in 8 ms; a bar in every column under a line of octant dots across every row draws in 17 ms and reads back in 5 ms.
-  A cell takes 8 bytes and its background 2, so the canvas holds 10 MB.
+  With a role of 2 bytes, a cell takes 8 bytes and its background 2, so the canvas holds 10 MB.
 
 ## Finer than a cell
 
@@ -70,11 +72,11 @@ Legacy Computing has no edge from a bottom corner to the opposite top corner: `�
 | `Braille` | 2 by 4 | `⠉ ⡠ ⣿` | `Quadrant` in ASCII |
 | `Octant` | 2 by 4 | U+1CD00… (Unicode 16) | `Sextant` in `Unicode13`, `Quadrant` in `Unicode3` and ASCII |
 | `Sextant` | 2 by 3 | U+1FB00… (Unicode 13) | `Quadrant` in `Unicode3` and ASCII |
-| `Quadrant` | 2 by 2 | `▘ ▚ ▟` | `'` for the upper dots, `.` for the lower, `:` for both in ASCII; `" , ;` for series 1, 3, 5…, so two lines differ without colour |
+| `Quadrant` | 2 by 2 | `▘ ▚ ▟` | `'` for the upper dots, `.` for the lower, `:` for both in ASCII; `" , ;` for an odd texture, so two lines differ without colour |
 | `HalfBlock` | 1 by 2 | `▀ ▄ █` | `'`, `.` and the role's filled cell in ASCII |
 
 A coarser grid lights the dot nearest each dot: of an octant's four rows the two in the middle share a sextant's middle row, and the upper two and lower two share a quadrant's rows; a sextant's middle row joins a quadrant's lower row, so a level line stays one dot thick.
-A cell has one role for all its dots, the last drawn, so two series crossing in a cell show as one there.
+A cell has one role for all its dots, the last drawn, so two roles crossing in a cell show as one there.
 `HalfBlock` is the exception, and the reason to pick it: its upper dot is `▀` in its own role, drawn on the lower dot's role, two colours in the cell.
 Dots of another kind replace the cell's.
 A segment walks one dot per step of its longer way and only the steps inside the canvas, so its cost is bounded by the canvas, not by its ends.
@@ -131,7 +133,7 @@ Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a 
 | `Unicode3` | Box drawing, block elements, braille | A block from the top or the right is the nearest of `▔ ▀ █`, `▕ ▐ █`; a stroke the nearest of `▔ ─ ▁`; a wedge the block filling as much from the bottom or the top; octants and sextants are quadrants |
 | `Ascii` | ASCII | A block at least half a cell is `#`, a smaller one `_`, `"` or `|` on the side it starts from; a stroke the nearest of `" - _`; a wedge `/` or `\`, a block when its edge is level; dots are `' . :` |
 
-In ASCII a filled cell is `# % * o @ x` for series 0 to 5, then again from `#`, so series differ without colour.
+In ASCII a filled cell is `# % * o @ x` for textures 0 to 5, then again from `#`, so roles differ without colour.
 A cell holding a block under half on a background shows the background's character, the one filling more of it.
 
 The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy or double, `.` when dashed, and a vertical run as `|`, `:` when dashed.

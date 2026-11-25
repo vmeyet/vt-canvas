@@ -6,6 +6,7 @@ use crate::geometry::{Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
 use crate::pixel::{self, Dots, Halves, Pixel};
+use crate::role::Role;
 use crate::shape::{Mark, Marker, Shape};
 use crate::text;
 use crate::tip::Tip;
@@ -16,36 +17,15 @@ pub const MAX_WIDTH: u16 = 1_000;
 /// Most cells [`Canvas::new`] accepts, width times height: a narrow canvas can be tall.
 pub const MAX_CELLS: usize = 1_000_000;
 
-/// What a cell is drawn for; the caller maps each role to a colour.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Role {
-    /// Empty cells and anything without a role of its own.
-    #[default]
-    Plain,
-    /// The border of a node.
-    Node,
-    /// A line between nodes and its arrow.
-    Edge,
-    /// Text: a node's name, an edge's label, a frame's title.
-    Label,
-    /// The frame around a group of nodes.
-    Group,
-    /// A chart's axis and its ticks.
-    Axis,
-    /// The marks of a chart's series, counted from 0; the caller maps each number to a colour of its palette.
-    Series(u8),
-}
-
 /// A stretch of one row whose cells share a role.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Run {
+pub struct Run<R> {
     /// The cells' characters, without `\n`.
     pub text: String,
     /// The role every cell of the run has.
-    pub role: Role,
+    pub role: R,
     /// The role behind the cells' characters, `None` where nothing is: a block a later drawing left as its background.
-    pub background: Option<Role>,
+    pub background: Option<R>,
 }
 
 /// The corners of a [`Frame`].
@@ -60,7 +40,7 @@ pub enum Corner {
 
 /// How [`Canvas::frame`] draws a rectangle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Frame<'a> {
+pub struct Frame<'a, R> {
     /// The kind of its four lines.
     pub kind: LineKind,
     /// Its corners.
@@ -68,7 +48,7 @@ pub struct Frame<'a> {
     /// Text set in the top border, cut to fit.
     pub title: Option<&'a str>,
     /// The role of the border and the title.
-    pub role: Role,
+    pub role: R,
 }
 
 /// A drawing the canvas refuses.
@@ -107,57 +87,57 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum Cell {
+enum Cell<R> {
     #[default]
     Empty,
     Text {
         char: char,
-        role: Role,
+        role: R,
     },
     /// The right half of the wide character in the cell to its left.
     WideTail,
     /// Marks where [`Canvas::text_cut`] cut its text.
     Ellipsis {
-        role: Role,
+        role: R,
     },
     Line {
         sides: Sides,
         rounded: bool,
-        role: Role,
+        role: R,
     },
     Arrow {
         direction: Direction,
-        role: Role,
+        role: R,
     },
     /// A cell of a shape's outline that is not a line.
     Mark {
         mark: Mark,
-        role: Role,
+        role: R,
     },
     Block {
         block: Block,
-        role: Role,
+        role: R,
     },
     Wedge {
         wedge: Wedge,
-        role: Role,
+        role: R,
     },
     Stroke {
         stroke: Stroke,
-        role: Role,
+        role: R,
     },
     /// The dots lit in a cell, one bit each, row by row from the top left.
     Dots {
         dots: Dots,
         lit: u8,
-        role: Role,
+        role: R,
     },
-    Halves(Halves),
+    Halves(Halves<R>),
 }
 
-impl Cell {
+impl<R: Role> Cell<R> {
     /// How much of the cell this glyph fills and from which side, when it is one that fills.
-    const fn cover(self) -> Option<Cover> {
+    fn cover(self) -> Option<Cover> {
         match self {
             Self::Block { block, .. } => Some(block.cover()),
             Self::Wedge { wedge, .. } => Some(wedge.cover()),
@@ -167,7 +147,7 @@ impl Cell {
     }
 
     /// The role a glyph that fills is drawn in.
-    const fn filled_in(self) -> Option<Role> {
+    fn filled_in(self) -> Option<R> {
         match self {
             Self::Block { role, .. } | Self::Wedge { role, .. } => Some(role),
             Self::Halves(halves) => halves.lowest(),
@@ -176,11 +156,11 @@ impl Cell {
     }
 
     /// The role `over`, drawn on this cell, keeps behind it: this cell's, when it fills at least half of what `over` leaves.
-    fn behind(self, over: Self) -> Option<Role> {
+    fn behind(self, over: Self) -> Option<R> {
         self.cover().filter(|cover| cover.shows_behind(over.cover())).and(self.filled_in())
     }
 
-    const fn fills_cell(self) -> bool {
+    fn fills_cell(self) -> bool {
         matches!(self.cover(), Some(cover) if cover.parts >= Cover::WHOLE)
     }
 }
@@ -190,15 +170,15 @@ impl Cell {
 /// Drawing out of bounds is clipped; the last drawing on a cell wins, except that lines merge into junctions
 /// and a block filling at least half of what a drawing leaves of its cell stays behind it, as the cell's background.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Canvas {
+pub struct Canvas<R> {
     width: usize,
     height: usize,
-    cells: Vec<Cell>,
+    cells: Vec<Cell<R>>,
     /// The role behind each cell's glyph.
-    grounds: Vec<Option<Role>>,
+    grounds: Vec<Option<R>>,
 }
 
-impl Canvas {
+impl<R: Role> Canvas<R> {
     /// An empty canvas, `width` columns by `height` rows, at most [`MAX_WIDTH`] columns and [`MAX_CELLS`] cells.
     pub fn new(width: u16, height: u16) -> Result<Self, Error> {
         let (columns, rows) = (usize::from(width), usize::from(height));
@@ -209,12 +189,12 @@ impl Canvas {
     }
 
     /// Writes `text` on one row from `at`, cut at the right edge; see [`width`](crate::width) for what it leaves out.
-    pub fn text(&mut self, at: Point, text: &str, role: Role) {
+    pub fn text(&mut self, at: Point, text: &str, role: R) {
         self.write(usize::from(at.x), usize::from(at.y), text, role, self.width);
     }
 
     /// Writes `text` like [`text`](Self::text), cut to `max_width` columns, its last column an ellipsis when cut.
-    pub fn text_cut(&mut self, at: Point, text: &str, max_width: u16, role: Role) {
+    pub fn text_cut(&mut self, at: Point, text: &str, max_width: u16, role: R) {
         let (x, y, max_width) = (usize::from(at.x), usize::from(at.y), usize::from(max_width));
         if text::width(text) <= max_width {
             self.write(x, y, text, role, x + max_width);
@@ -225,7 +205,7 @@ impl Canvas {
     }
 
     /// Draws a horizontal or vertical line, both ends included; a cell it shares with another line becomes a junction.
-    pub fn line(&mut self, from: Point, to: Point, kind: LineKind, role: Role) -> Result<(), Error> {
+    pub fn line(&mut self, from: Point, to: Point, kind: LineKind, role: R) -> Result<(), Error> {
         if from.x != to.x && from.y != to.y {
             return Err(Error::Diagonal { from, to });
         }
@@ -236,7 +216,7 @@ impl Canvas {
     /// Draws a line from each point to the next, so they turn a corner at every point between the ends.
     ///
     /// A pair of consecutive points sharing neither a row nor a column is refused before anything is drawn.
-    pub fn path(&mut self, points: &[Point], kind: LineKind, role: Role) -> Result<(), Error> {
+    pub fn path(&mut self, points: &[Point], kind: LineKind, role: R) -> Result<(), Error> {
         if let Some(&[from, to]) = points.windows(2).find(|pair| pair[0].x != pair[1].x && pair[0].y != pair[1].y) {
             return Err(Error::Diagonal { from, to });
         }
@@ -247,7 +227,7 @@ impl Canvas {
     }
 
     /// Draws the border of `rect`, with its title in the top border after the first corner.
-    pub fn frame(&mut self, rect: Rect, frame: Frame<'_>) {
+    pub fn frame(&mut self, rect: Rect, frame: Frame<'_, R>) {
         if rect.width == 0 || rect.height == 0 {
             return;
         }
@@ -271,7 +251,7 @@ impl Canvas {
     /// Draws the outline of `shape` on the border of `rect`; content goes inside its [`inset`](Shape::inset).
     ///
     /// A line drawn onto a slant or a bracket of the outline leaves it whole, so an edge ending on a side touches it.
-    pub fn shape(&mut self, rect: Rect, shape: Shape, role: Role) {
+    pub fn shape(&mut self, rect: Rect, shape: Shape, role: R) {
         if rect.width == 0 || rect.height == 0 {
             return;
         }
@@ -285,28 +265,28 @@ impl Canvas {
     }
 
     /// Draws an arrow head pointing to `direction`.
-    pub fn arrow(&mut self, at: Point, direction: Direction, role: Role) {
+    pub fn arrow(&mut self, at: Point, direction: Direction, role: R) {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Arrow { direction, role });
     }
 
     /// Draws a cross, `╳` (`x` in ASCII): a crossed arrow head, or where a line is struck out.
     ///
     /// Like a shape's mark, a line drawn onto it later leaves it whole.
-    pub fn cross(&mut self, at: Point, role: Role) {
+    pub fn cross(&mut self, at: Point, role: R) {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Cross, role });
     }
 
     /// Draws `marker` on one cell: a node too small for an outline.
     ///
     /// Like a shape's mark, a line drawn onto it later leaves it whole, so an edge starting on it keeps it.
-    pub fn marker(&mut self, at: Point, marker: Marker, role: Role) {
+    pub fn marker(&mut self, at: Point, marker: Marker, role: R) {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Marker(marker), role });
     }
 
     /// Draws `tip` on one cell, facing the node `heading` points at.
     ///
     /// A bar merges with the lines through its cell into `┼`; any other tip is kept under a line, as a shape's mark is.
-    pub fn tip(&mut self, at: Point, heading: Direction, tip: Tip, role: Role) {
+    pub fn tip(&mut self, at: Point, heading: Direction, tip: Tip, role: R) {
         let (x, y) = (usize::from(at.x), usize::from(at.y));
         if tip == Tip::Bar {
             let across = Direction::ALL.into_iter().fold(Sides::default(), |sides, side| sides.with(side, Some(LineKind::Light)));
@@ -320,35 +300,35 @@ impl Canvas {
     ///
     /// A bar standing on the bottom of row 9 and 2.5 rows tall is `column(x, 60..80, role)`.
     /// A stretch that touches neither end of its cell has no glyph, so it moves to the end it is nearer.
-    pub fn column(&mut self, x: u16, eighths: Range<u32>, role: Role) {
+    pub fn column(&mut self, x: u16, eighths: Range<u32>, role: R) {
         for placed in block::span(eighths, self.height, Direction::Up) {
             self.put(usize::from(x), placed.cell, Cell::Block { block: placed.block, role });
         }
     }
 
     /// Fills row `y` between two offsets, each counted in eighths of a column from the left of the canvas.
-    pub fn row(&mut self, y: u16, eighths: Range<u32>, role: Role) {
+    pub fn row(&mut self, y: u16, eighths: Range<u32>, role: R) {
         for placed in block::span(eighths, self.width, Direction::Left) {
             self.put(placed.cell, usize::from(y), Cell::Block { block: placed.block, role });
         }
     }
 
     /// Fills the part of the cell `at` that is on one side of a slanted edge; a wedge filling nothing draws nothing.
-    pub fn wedge(&mut self, at: Point, wedge: Wedge, role: Role) {
+    pub fn wedge(&mut self, at: Point, wedge: Wedge, role: R) {
         if !wedge.fills_nothing() {
             self.put(usize::from(at.x), usize::from(at.y), Cell::Wedge { wedge, role });
         }
     }
 
     /// Draws a line one eighth of a row thick across column `x`, `eighth` eighths of a row below the top of the canvas.
-    pub fn stroke(&mut self, x: u16, eighth: u32, role: Role) {
+    pub fn stroke(&mut self, x: u16, eighth: u32, role: R) {
         self.put(usize::from(x), Stroke::row(eighth), Cell::Stroke { stroke: Stroke::at(eighth), role });
     }
 
     /// Lights the dot `at` of the grid `dots` cuts the cells into.
     ///
     /// A cell keeps one role for all its dots, the last drawn, but for [`Dots::HalfBlock`]; dots of another kind replace the cell's.
-    pub fn dot(&mut self, at: Pixel, dots: Dots, role: Role) {
+    pub fn dot(&mut self, at: Pixel, dots: Dots, role: R) {
         let (x, y) = ((at.x / dots.across()) as usize, (at.y / dots.down()) as usize);
         let Some(index) = self.index(x, y) else { return };
         let bit = dots.bit(at);
@@ -361,7 +341,7 @@ impl Canvas {
     }
 
     /// Lights the dots of the straight line from `from` to `to`, both included.
-    pub fn segment(&mut self, from: Pixel, to: Pixel, dots: Dots, role: Role) {
+    pub fn segment(&mut self, from: Pixel, to: Pixel, dots: Dots, role: R) {
         let size = Pixel::new(self.width as u32 * dots.across(), self.height as u32 * dots.down());
         for dot in pixel::between(from, to, size) {
             self.dot(dot, dots, role);
@@ -369,7 +349,7 @@ impl Canvas {
     }
 
     /// Each row as runs of text sharing a role and a background, every row exactly as wide as the canvas and without `\n`.
-    pub fn rows(&self, glyphs: GlyphSet) -> impl Iterator<Item = Vec<Run>> + '_ {
+    pub fn rows(&self, glyphs: GlyphSet) -> impl Iterator<Item = Vec<Run<R>>> + '_ {
         (0..self.height).map(move |y| {
             let row = y * self.width..(y + 1) * self.width;
             runs(&self.cells[row.clone()], &self.grounds[row], glyphs)
@@ -377,7 +357,7 @@ impl Canvas {
     }
 
     /// `from` and `to` share a row or a column.
-    fn straight(&mut self, from: Point, to: Point, kind: LineKind, role: Role) {
+    fn straight(&mut self, from: Point, to: Point, kind: LineKind, role: R) {
         let horizontal = from.y == to.y;
         let (low, high, before) = if horizontal {
             (from.x.min(to.x), from.x.max(to.x), Direction::Left)
@@ -391,7 +371,7 @@ impl Canvas {
     }
 
     /// The title sits between `┌─ ` and ` ─┐`, cut to fit.
-    fn title(&mut self, rect: Rect, title: &str, role: Role) {
+    fn title(&mut self, rect: Rect, title: &str, role: R) {
         let (left, y) = (usize::from(rect.x), usize::from(rect.y));
         let (start, end) = (left + 3, (left + usize::from(rect.width)).saturating_sub(3));
         if start >= end {
@@ -405,7 +385,7 @@ impl Canvas {
     /// Writes `text` from column `x` up to column `end`, excluded, and returns the column after the last character.
     ///
     /// `end` stops at the right edge, so a wide character on the last column is left out rather than drawn without its right half.
-    fn write(&mut self, x: usize, y: usize, text: &str, role: Role, end: usize) -> usize {
+    fn write(&mut self, x: usize, y: usize, text: &str, role: R, end: usize) -> usize {
         let end = end.min(self.width);
         let mut x = x;
         for glyph in text::glyphs(text) {
@@ -422,7 +402,7 @@ impl Canvas {
     }
 
     /// A line with both ends on one cell leaves it through no side, so it draws nothing.
-    fn draw_line(&mut self, x: usize, y: usize, sides: Sides, role: Role) {
+    fn draw_line(&mut self, x: usize, y: usize, sides: Sides, role: R) {
         let Some(index) = self.index(x, y).filter(|_| sides.count() > 0) else { return };
         match self.cells[index] {
             Cell::Line { sides: below, rounded, .. } => self.cells[index] = Cell::Line { sides: below.merge(sides), rounded, role },
@@ -432,7 +412,7 @@ impl Canvas {
     }
 
     /// A cell of half blocks keeps its background until both halves are lit.
-    fn light(&mut self, index: usize, halves: Halves) {
+    fn light(&mut self, index: usize, halves: Halves<R>) {
         if halves.fills_cell() {
             self.grounds[index] = None;
         }
@@ -448,7 +428,7 @@ impl Canvas {
     }
 
     /// Writing over either half of a wide character blanks the other half.
-    fn put(&mut self, x: usize, y: usize, cell: Cell) {
+    fn put(&mut self, x: usize, y: usize, cell: Cell<R>) {
         let Some(index) = self.index(x, y) else { return };
         if self.cells[index] == Cell::WideTail {
             self.cells[index - 1] = Cell::Empty;
@@ -472,14 +452,14 @@ fn segment(at: u16, low: u16, high: u16, kind: LineKind, before: Direction) -> S
 
 /// A cell as it is written: its character, the role it is drawn in and the role behind it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Styled {
+pub(crate) struct Styled<R> {
     pub(crate) char: char,
-    pub(crate) role: Role,
-    pub(crate) background: Option<Role>,
+    pub(crate) role: R,
+    pub(crate) background: Option<R>,
 }
 
-fn runs(cells: &[Cell], grounds: &[Option<Role>], glyphs: GlyphSet) -> Vec<Run> {
-    let mut runs: Vec<Run> = Vec::new();
+fn runs<R: Role>(cells: &[Cell<R>], grounds: &[Option<R>], glyphs: GlyphSet) -> Vec<Run<R>> {
+    let mut runs: Vec<Run<R>> = Vec::new();
     for (cell, ground) in cells.iter().zip(grounds) {
         let Some(Styled { char, role, background }) = styled(*cell, *ground, glyphs) else { continue };
         match runs.last_mut() {
@@ -491,9 +471,9 @@ fn runs(cells: &[Cell], grounds: &[Option<Role>], glyphs: GlyphSet) -> Vec<Run> 
 }
 
 /// `None` for the right half of a wide character, written with its left half.
-fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> {
+fn styled<R: Role>(cell: Cell<R>, ground: Option<R>, glyphs: GlyphSet) -> Option<Styled<R>> {
     let (char, role) = match cell {
-        Cell::Empty => (' ', Role::Plain),
+        Cell::Empty => (' ', R::default()),
         Cell::WideTail => return None,
         Cell::Text { char, role } => (char, role),
         Cell::Line { sides, rounded, role } => (glyphs.line(sides, rounded), role),
@@ -503,7 +483,7 @@ fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> 
         Cell::Block { block, role } => return Some(block.styled(role, ground, glyphs)),
         Cell::Wedge { wedge, role } => return Some(wedge.styled(role, ground, glyphs)),
         Cell::Stroke { stroke, role } => (stroke.glyph(glyphs), role),
-        Cell::Dots { dots, lit, role } => (dots.glyph(lit, role, glyphs), role),
+        Cell::Dots { dots, lit, role } => (dots.glyph(lit, role.texture(), glyphs), role),
         Cell::Halves(halves) => return Some(halves.styled(ground, glyphs)),
     };
     Some(Styled { char, role, background: ground })
@@ -512,13 +492,13 @@ fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::canvas::Role as Part;
+    use crate::role::tests::Part;
     use crate::wedge::Fill;
 
-    const NODE: Frame<'static> = Frame { kind: LineKind::Light, corner: Corner::Square, title: None, role: Part::Node };
+    const NODE: Frame<'static, Part> = Frame { kind: LineKind::Light, corner: Corner::Square, title: None, role: Part::Node };
 
     /// Also checks the invariant every drawing keeps: each row is exactly as wide as the canvas.
-    fn render(canvas: &Canvas, glyphs: GlyphSet) -> String {
+    fn render(canvas: &Canvas<Part>, glyphs: GlyphSet) -> String {
         let rows: Vec<String> = canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect()).collect();
         for row in &rows {
             assert_eq!(crate::width(row), canvas.width, "row {row:?}");
@@ -526,11 +506,11 @@ mod tests {
         rows.join("\n")
     }
 
-    fn canvas(width: u16, height: u16) -> Canvas {
+    fn canvas(width: u16, height: u16) -> Canvas<Part> {
         Canvas::new(width, height).unwrap()
     }
 
-    fn line(canvas: &mut Canvas, from: (u16, u16), to: (u16, u16), kind: LineKind) {
+    fn line(canvas: &mut Canvas<Part>, from: (u16, u16), to: (u16, u16), kind: LineKind) {
         canvas.line(Point::new(from.0, from.1), Point::new(to.0, to.1), kind, Part::Edge).unwrap();
     }
 
@@ -541,7 +521,7 @@ mod tests {
     /// The memory `ARCHITECTURE.md` states for a canvas at the cell limit.
     #[test]
     fn a_cell_and_its_background_take_ten_bytes() {
-        assert_eq!((size_of::<Cell>(), size_of::<Option<Role>>()), (8, 2));
+        assert_eq!((size_of::<Cell<Part>>(), size_of::<Option<Part>>()), (8, 2));
     }
 
     #[test]
@@ -561,14 +541,14 @@ mod tests {
     #[test]
     fn a_canvas_over_the_cell_limit_is_refused() {
         assert_eq!(
-            Canvas::new(MAX_WIDTH, tallest_full_width() + 1),
+            Canvas::<Part>::new(MAX_WIDTH, tallest_full_width() + 1),
             Err(Error::TooLarge { width: MAX_WIDTH, height: tallest_full_width() + 1 })
         );
     }
 
     #[test]
     fn a_canvas_over_the_width_limit_is_refused() {
-        assert_eq!(Canvas::new(MAX_WIDTH + 1, 1), Err(Error::TooLarge { width: MAX_WIDTH + 1, height: 1 }));
+        assert_eq!(Canvas::<Part>::new(MAX_WIDTH + 1, 1), Err(Error::TooLarge { width: MAX_WIDTH + 1, height: 1 }));
     }
 
     #[test]
@@ -904,14 +884,14 @@ mod tests {
         canvas.text(Point::new(1, 0), "ab", Part::Label);
         line(&mut canvas, (3, 0), (4, 0), LineKind::Light);
 
-        let runs: Vec<Run> = canvas.rows(GlyphSet::Unicode).flatten().collect();
+        let runs: Vec<Run<Part>> = canvas.rows(GlyphSet::Unicode).flatten().collect();
 
         let run = |text: &str, role| Run { text: text.to_owned(), role, background: None };
         assert_eq!(runs, [run(" ", Part::Plain), run("ab", Part::Label), run("──", Part::Edge), run(" ", Part::Plain)]);
     }
 
     /// Each run as its text, its role and its background, so a test sees which role a cell kept.
-    fn styles(canvas: &Canvas, glyphs: GlyphSet) -> Vec<String> {
+    fn styles(canvas: &Canvas<Part>, glyphs: GlyphSet) -> Vec<String> {
         canvas
             .rows(glyphs)
             .map(|runs| runs.into_iter().map(|run| format!("[{} {:?} on {:?}]", run.text, run.role, run.background)).collect())
@@ -1195,7 +1175,7 @@ mod tests {
             ]
         }
 
-        fn draw(canvas: &mut Canvas, fine: Fine, role: Role) {
+        fn draw(canvas: &mut Canvas<Part>, fine: Fine, role: Part) {
             match fine {
                 Fine::Column(x, eighths) => canvas.column(x, eighths, role),
                 Fine::Row(y, eighths) => canvas.row(y, eighths, role),

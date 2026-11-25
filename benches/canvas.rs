@@ -1,7 +1,7 @@
 //! How long a canvas at the cell limit takes to fill and read back: `cargo bench --bench canvas`.
 
 use divan::{Bencher, black_box};
-use vt_canvas::{Canvas, Dots, Error, GlyphSet, LineKind, MAX_CELLS, MAX_WIDTH, Pixel, Point, Role};
+use vt_canvas::{Canvas, Dots, Error, GlyphSet, LineKind, MAX_CELLS, MAX_WIDTH, Pixel, Point};
 
 const HEIGHT: u16 = (MAX_CELLS / MAX_WIDTH as usize) as u16;
 
@@ -13,19 +13,19 @@ fn main() {
 }
 
 /// Every other row and column is a line, so half the cells are junctions: the costliest glyph lookup.
-fn lattice() -> Result<Canvas, Error> {
+fn lattice() -> Result<Canvas<u8>, Error> {
     let mut canvas = Canvas::new(MAX_WIDTH, HEIGHT)?;
     for y in (0..HEIGHT).step_by(2) {
-        canvas.line(Point::new(0, y), Point::new(MAX_WIDTH - 1, y), LineKind::Light, Role::Edge)?;
+        canvas.line(Point::new(0, y), Point::new(MAX_WIDTH - 1, y), LineKind::Light, 0)?;
     }
     for x in (0..MAX_WIDTH).step_by(2) {
-        canvas.line(Point::new(x, 0), Point::new(x, HEIGHT - 1), LineKind::Heavy, Role::Edge)?;
+        canvas.line(Point::new(x, 0), Point::new(x, HEIGHT - 1), LineKind::Heavy, 0)?;
     }
     Ok(canvas)
 }
 
 #[divan::bench]
-fn lattice_at_the_cell_limit_drawn() -> Result<Canvas, Error> {
+fn lattice_at_the_cell_limit_drawn() -> Result<Canvas<u8>, Error> {
     lattice()
 }
 
@@ -37,32 +37,32 @@ fn lattice_at_the_cell_limit_read(bencher: Bencher<'_, '_>) {
 }
 
 #[divan::bench]
-fn text_at_the_cell_limit_drawn() -> Result<Canvas, Error> {
+fn text_at_the_cell_limit_drawn() -> Result<Canvas<u8>, Error> {
     let row = "漢a".repeat(usize::from(MAX_WIDTH) / 3);
     let mut canvas = Canvas::new(MAX_WIDTH, HEIGHT)?;
     for y in 0..HEIGHT {
-        canvas.text(Point::new(0, y), black_box(&row), Role::Label);
+        canvas.text(Point::new(0, y), black_box(&row), 0);
     }
     Ok(canvas)
 }
 
 /// A bar in every column, each a different height, then a line of dots across every row: every cell is drawn twice.
-fn bars_under_dots() -> Result<Canvas, Error> {
+fn bars_under_dots() -> Result<Canvas<u8>, Error> {
     let mut canvas = Canvas::new(MAX_WIDTH, HEIGHT)?;
     let bottom = u32::from(HEIGHT) * 8;
     for x in 0..MAX_WIDTH {
-        canvas.column(x, u32::from(x) * 7 % bottom..bottom, Role::Series(0));
+        canvas.column(x, u32::from(x) * 7 % bottom..bottom, 0);
     }
     let right = u32::from(MAX_WIDTH) * Dots::Octant.across() - 1;
     for y in 0..u32::from(HEIGHT) {
         let rise = y * Dots::Octant.down();
-        canvas.segment(Pixel::new(0, rise), Pixel::new(right, rise + 3), Dots::Octant, Role::Series(1));
+        canvas.segment(Pixel::new(0, rise), Pixel::new(right, rise + 3), Dots::Octant, 1);
     }
     Ok(canvas)
 }
 
 #[divan::bench]
-fn bars_under_dots_at_the_cell_limit_drawn() -> Result<Canvas, Error> {
+fn bars_under_dots_at_the_cell_limit_drawn() -> Result<Canvas<u8>, Error> {
     bars_under_dots()
 }
 

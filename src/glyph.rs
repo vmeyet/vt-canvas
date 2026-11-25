@@ -1,4 +1,3 @@
-use crate::canvas::Role;
 use crate::geometry::Direction;
 use crate::line::{LineKind, Sides};
 use crate::shape::{Mark, Marker};
@@ -23,7 +22,7 @@ pub enum GlyphSet {
     Ascii,
 }
 
-/// What a filled cell is drawn with in ASCII, one character per series so they differ without colour.
+/// What a filled cell is drawn with in ASCII, one character per texture so roles differ without colour.
 const ASCII_FILLS: [char; 6] = ['#', '%', '*', 'o', '@', 'x'];
 
 impl GlyphSet {
@@ -100,12 +99,11 @@ impl GlyphSet {
         }
     }
 
-    /// A whole cell in `role`: `█`, or in ASCII a character of its own for each of the first series.
-    pub(crate) const fn fill(self, role: Role) -> char {
-        match (self, role) {
-            (Self::Ascii, Role::Series(series)) => ASCII_FILLS[series as usize % ASCII_FILLS.len()],
-            (Self::Ascii, _) => ASCII_FILLS[0],
-            _ => '█',
+    /// A whole cell: `█`, or in ASCII a character of its own for each of the first textures.
+    pub(crate) const fn fill(self, texture: u8) -> char {
+        match self {
+            Self::Ascii => ASCII_FILLS[texture as usize % ASCII_FILLS.len()],
+            Self::Unicode | Self::Unicode13 | Self::Unicode3 => '█',
         }
     }
 }
@@ -223,7 +221,6 @@ const SINGLE_DOUBLE: [char; 81] = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::canvas::Role as Part;
     use unicode_width::UnicodeWidthChar;
 
     const KINDS: [Option<LineKind>; 5] =
@@ -269,7 +266,7 @@ mod tests {
             .chain(Marker::ALL.map(Mark::Marker))
             .chain(Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|heading| Mark::Tip(tip, heading))))
             .map(|mark| GlyphSet::Unicode.mark(mark));
-        let fills = [GlyphSet::Unicode.fill(Part::Plain)];
+        let fills = [GlyphSet::Unicode.fill(0)];
         lines
             .chain(arrows)
             .chain(marks)
@@ -319,13 +316,10 @@ mod tests {
     }
 
     #[test]
-    fn ascii_fills_each_series_with_a_character_of_its_own() {
-        let fills: String = [Part::Node, Part::Series(0), Part::Series(1), Part::Series(5), Part::Series(6)]
-            .map(|role| GlyphSet::Ascii.fill(role))
-            .into_iter()
-            .collect();
+    fn ascii_fills_each_texture_with_a_character_of_its_own() {
+        let fills: String = [0, 1, 5, 6].map(|texture| GlyphSet::Ascii.fill(texture)).into_iter().collect();
 
-        assert_eq!(fills, "##%x#");
+        assert_eq!(fills, "#%x#");
     }
 
     #[test]
