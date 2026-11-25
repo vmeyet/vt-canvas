@@ -5,6 +5,7 @@ use crate::block::{self, Block, Stroke};
 use crate::geometry::{Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
+use crate::pixel::{self, Dots, Halves, Pixel};
 use crate::shape::{Mark, Marker, Shape};
 use crate::text;
 use crate::tip::Tip;
@@ -145,6 +146,13 @@ enum Cell {
         stroke: Stroke,
         role: Role,
     },
+    /// The dots lit in a cell, one bit each, row by row from the top left.
+    Dots {
+        dots: Dots,
+        lit: u8,
+        role: Role,
+    },
+    Halves(Halves),
 }
 
 impl Cell {
@@ -153,6 +161,7 @@ impl Cell {
         match self {
             Self::Block { block, role } if block.fills_half() => Some(role),
             Self::Wedge { wedge, role } if wedge.fills_half() => Some(role),
+            Self::Halves(halves) => halves.behind(),
             _ => None,
         }
     }
@@ -161,6 +170,7 @@ impl Cell {
         match self {
             Self::Block { block, .. } => block.fills_cell(),
             Self::Wedge { wedge, .. } => wedge.fills_cell(),
+            Self::Halves(halves) => halves.fills_cell(),
             _ => false,
         }
     }
@@ -327,6 +337,29 @@ impl Canvas {
         self.put(usize::from(x), y as usize, Cell::Stroke { stroke, role });
     }
 
+    /// Lights the dot `at` of the grid `dots` cuts the cells into.
+    ///
+    /// A cell keeps one role for all its dots, the last drawn, but for [`Dots::HalfBlock`]; dots of another kind replace the cell's.
+    pub fn dot(&mut self, at: Pixel, dots: Dots, role: Role) {
+        let (x, y) = ((at.x / dots.across()) as usize, (at.y / dots.down()) as usize);
+        let Some(index) = self.index(x, y) else { return };
+        let bit = dots.bit(at);
+        match (self.cells[index], dots) {
+            (Cell::Dots { dots: under, lit, .. }, _) if under == dots => self.cells[index] = Cell::Dots { dots, lit: lit | bit, role },
+            (Cell::Halves(halves), Dots::HalfBlock) => self.light(index, halves.lit(bit, role)),
+            (_, Dots::HalfBlock) => self.put(x, y, Cell::Halves(Halves::default().lit(bit, role))),
+            _ => self.put(x, y, Cell::Dots { dots, lit: bit, role }),
+        }
+    }
+
+    /// Lights the dots of the straight line from `from` to `to`, both included.
+    pub fn segment(&mut self, from: Pixel, to: Pixel, dots: Dots, role: Role) {
+        let size = Pixel::new(self.width as u32 * dots.across(), self.height as u32 * dots.down());
+        for dot in pixel::between(from, to, size) {
+            self.dot(dot, dots, role);
+        }
+    }
+
     /// Each row as runs of text sharing a role and a background, every row exactly as wide as the canvas and without `\n`.
     pub fn rows(&self, glyphs: GlyphSet) -> impl Iterator<Item = Vec<Run>> + '_ {
         (0..self.height).map(move |y| {
@@ -388,6 +421,14 @@ impl Canvas {
             Cell::Mark { .. } => {}
             _ => self.put(x, y, Cell::Line { sides, rounded: false, role }),
         }
+    }
+
+    /// A cell of half blocks keeps its background until both halves are lit.
+    fn light(&mut self, index: usize, halves: Halves) {
+        if halves.fills_cell() {
+            self.grounds[index] = None;
+        }
+        self.cells[index] = Cell::Halves(halves);
     }
 
     fn round(&mut self, at: Point) {
@@ -454,6 +495,8 @@ fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> 
         Cell::Block { block, role } => return Some(block.styled(role, ground, glyphs)),
         Cell::Wedge { wedge, role } => return Some(wedge.styled(role, ground, glyphs)),
         Cell::Stroke { stroke, role } => (stroke.glyph(glyphs), role),
+        Cell::Dots { dots, lit, role } => (dots.glyph(lit, glyphs), role),
+        Cell::Halves(halves) => return Some(halves.styled(ground, glyphs)),
     };
     Some(Styled { char, role, background: ground })
 }
@@ -957,6 +1000,64 @@ mod tests {
         canvas.wedge(Point::new(0, 0), Wedge { left: 0, right: 0, fill: Fill::Below }, Role::Series(0));
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "a");
+    }
+
+    #[test]
+    fn dots_of_one_kind_share_a_cell_in_the_role_drawn_last() {
+        let mut canvas = canvas(2, 1);
+
+        canvas.dot(Pixel::new(0, 0), Dots::Braille, Role::Series(0));
+        canvas.dot(Pixel::new(1, 3), Dots::Braille, Role::Series(1));
+        canvas.dot(Pixel::new(2, 1), Dots::Braille, Role::Series(0));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[⢁ Series(1) on None][⠂ Series(0) on None]"]);
+    }
+
+    #[test]
+    fn dots_of_another_kind_replace_the_cell() {
+        let mut canvas = canvas(1, 1);
+        canvas.dot(Pixel::new(0, 0), Dots::Braille, Role::Series(0));
+
+        canvas.dot(Pixel::new(1, 1), Dots::Quadrant, Role::Series(1));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▗ Series(1) on None]"]);
+    }
+
+    #[test]
+    fn the_two_halves_of_a_cell_each_keep_their_role() {
+        let mut canvas = canvas(3, 1);
+
+        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Role::Series(0));
+        canvas.dot(Pixel::new(0, 1), Dots::HalfBlock, Role::Series(1));
+        canvas.dot(Pixel::new(1, 0), Dots::HalfBlock, Role::Series(2));
+        canvas.dot(Pixel::new(1, 1), Dots::HalfBlock, Role::Series(2));
+        canvas.dot(Pixel::new(2, 1), Dots::HalfBlock, Role::Series(3));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▀ Series(0) on Some(Series(1))][█ Series(2) on None][▄ Series(3) on None]"]);
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "#*.");
+    }
+
+    #[test]
+    fn dots_over_a_bar_are_drawn_on_the_bar() {
+        let mut canvas = canvas(2, 1);
+        canvas.row(0, 0..16, Role::Series(0));
+
+        canvas.segment(Pixel::new(0, 1), Pixel::new(3, 1), Dots::Braille, Role::Series(1));
+        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Role::Series(2));
+        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Role::Series(2));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▀ Series(2) on Some(Series(0))][⠒ Series(1) on Some(Series(0))]"]);
+    }
+
+    #[test]
+    fn a_segment_leaving_the_canvas_is_clipped() {
+        let mut canvas = canvas(2, 1);
+
+        canvas.segment(Pixel::new(0, 0), Pixel::new(u32::MAX, 1), Dots::Quadrant, Role::Series(0));
+        canvas.dot(Pixel::new(4, 0), Dots::Quadrant, Role::Series(0));
+        canvas.dot(Pixel::new(0, 2), Dots::Quadrant, Role::Series(0));
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "▀▀");
     }
 
     #[test]

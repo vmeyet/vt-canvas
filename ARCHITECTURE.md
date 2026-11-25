@@ -8,7 +8,7 @@ This page says how the code is laid out today; when a module or a boundary chang
 
 - The cell grid: each cell holds one glyph, its width, a colour role and the role behind it.
 - Drawing on it: text, lines and boxes whose crossings merge into the right junction glyph, and node shapes.
-- Drawing finer than a cell: blocks filling a cell by eighths, lines one eighth thick, and wedges under or over a slanted edge.
+- Drawing finer than a cell: blocks filling a cell by eighths, lines one eighth thick, wedges under or over a slanted edge, and dots on a grid of pixels that cuts each cell in 2 to 8.
 - Glyph sets: which characters a drawing uses, avoiding East Asian ambiguous-width glyphs where Unicode has a choice.
 - Measuring text: `width` says how many columns `Canvas::text` gives a string, so a caller sizes a box with the rule the canvas draws with.
 
@@ -27,6 +27,7 @@ This page says how the code is laid out today; when a module or a boundary chang
 | `line` | `LineKind` and the four sides a line leaves a cell through |
 | `glyph` | `GlyphSet`: the character for a cell's sides, an arrow, a shape's mark or a filled cell, junction tables included |
 | `block` | A cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, and the cells a stretch covers |
+| `pixel` | `Dots`, `Pixel`: the dots of a cell and their glyph in each set, the two halves of a half-block cell, and the dots of a straight line |
 | `wedge` | `Wedge`, `Fill`: a cell filled under or over a slanted edge, its glyph in each set |
 | `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines; `Marker`, a node on one cell |
 | `tip` | `Tip`: what an edge draws where it meets a node, a class relation's head or a crow's foot's part |
@@ -61,16 +62,32 @@ It is how a line passes in front of a bar: the bar stays behind it as the cell's
 `wedge` fills the part of a cell under or over an edge that runs from its left side to its right side, each end at 0 to 3 thirds of the cell's height: `🭈 🭊 🬽 🭆 🭄 🬿 🭑 🭂 🭏 🭍` below, `🭞 🭠 🭓 🭜 🭚 🭕 🭧 🭘 🭥 🭣` above, and the sextant rows `🬭 🬹 🬎 🬂` where the edge is level.
 Legacy Computing has no edge from a bottom corner to the opposite top corner: `▌` or `▐`, the half on the filled side, stands in.
 
+`dot` lights one dot of a grid of pixels over the cells and `segment` the dots of a straight line; `Dots` says how many dots a cell holds and which glyphs light them.
+
+| `Dots` | In a cell | Glyphs | Drawn as, by the sets without them |
+|---|---|---|---|
+| `Braille` | 2 by 4 | `⠉ ⡠ ⣿` | `Quadrant` in ASCII |
+| `Octant` | 2 by 4 | U+1CD00… (Unicode 16) | `Sextant` in `Unicode13`, `Quadrant` in `Unicode3` and ASCII |
+| `Sextant` | 2 by 3 | U+1FB00… (Unicode 13) | `Quadrant` in `Unicode3` and ASCII |
+| `Quadrant` | 2 by 2 | `▘ ▚ ▟` | `'` for the upper dots, `.` for the lower, `:` for both in ASCII |
+| `HalfBlock` | 1 by 2 | `▀ ▄ █` | `'`, `.` and the role's filled cell in ASCII |
+
+A coarser grid lights the dot nearest each dot: of an octant's four rows the two in the middle share a sextant's middle row, and the upper two and lower two share a quadrant's rows; a sextant's middle row joins a quadrant's lower row, so a level line stays one dot thick.
+A cell has one role for all its dots, the last drawn, so two series crossing in a cell show as one there.
+`HalfBlock` is the exception, and the reason to pick it: its upper dot is `▀` in its own role, drawn on the lower dot's role, two colours in the cell.
+Dots of another kind replace the cell's.
+A segment walks one dot per step of its longer way and only the steps inside the canvas, so its cost is bounded by the canvas, not by its ends.
+
 ## Layers
 
 A terminal cell has one character, one colour for it and one colour behind it, so a cell shows two roles at most.
 Each cell keeps a glyph with its role and, behind it, a *background* role.
 
 1. A drawing replaces the cell's glyph; the last one wins, as for text and lines.
-2. When the glyph it replaces is a block or a wedge filling at least half the cell, its role becomes the background; a smaller one is dropped.
+2. When the glyph it replaces is a block, a wedge or a half-block dot filling at least half the cell, its role becomes the background; a smaller one is dropped.
 3. Otherwise the background stays as it was, until a drawing that fills the whole cell clears it.
 
-So text or a line over a bar is drawn on the bar's colour, and a block drawn over a taller one shows both: `▅` in its role on the other's.
+So text, a line, a stroke or dots over a bar are drawn on the bar's colour, and a block drawn over a taller one shows both: `▅` in its role on the other's.
 Where a third role would be needed (a line through the cell a bar ends in), the bar gains or loses under half a cell.
 
 ## Shapes
@@ -107,9 +124,9 @@ Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a 
 | Set | Holds | Falls back |
 |---|---|---|
 | `Unicode` | Everything, octants (Unicode 16) included | |
-| `Unicode13` | Symbols for Legacy Computing: the eighth blocks from the top and the right, strokes, wedges | |
-| `Unicode3` | Box drawing, block elements, braille | A block from the top or the right is the nearest of `▔ ▀ █`, `▕ ▐ █`; a stroke the nearest of `▔ ─ ▁`; a wedge the block filling as much from the bottom or the top |
-| `Ascii` | ASCII | A block at least half a cell is `#`, a smaller one `_`, `"` or `|` on the side it starts from; a stroke the nearest of `" - _`; a wedge `/` or `\`, a block when its edge is level |
+| `Unicode13` | Symbols for Legacy Computing: sextants, the eighth blocks from the top and the right, strokes, wedges | Octants are sextants |
+| `Unicode3` | Box drawing, block elements, braille | A block from the top or the right is the nearest of `▔ ▀ █`, `▕ ▐ █`; a stroke the nearest of `▔ ─ ▁`; a wedge the block filling as much from the bottom or the top; octants and sextants are quadrants |
+| `Ascii` | ASCII | A block at least half a cell is `#`, a smaller one `_`, `"` or `|` on the side it starts from; a stroke the nearest of `" - _`; a wedge `/` or `\`, a block when its edge is level; dots are `' . :` |
 
 In ASCII a filled cell is `# % * o @ x` for series 0 to 5, then again from `#`, so series differ without colour.
 A cell holding a block under half on a background shows the background's character, the one filling more of it.
