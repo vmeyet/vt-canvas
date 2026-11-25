@@ -110,10 +110,12 @@ impl Shape {
         let edges = Edges::of(rect);
         match self {
             Self::Subroutine if rect.width > 2 => vec![
-                [Point::new(edges.left + 1, edges.top), Point::new(edges.left + 1, edges.bottom)],
+                [Point::new(edges.left.saturating_add(1), edges.top), Point::new(edges.left.saturating_add(1), edges.bottom)],
                 [Point::new(edges.right - 1, edges.top), Point::new(edges.right - 1, edges.bottom)],
             ],
-            Self::Cylinder if rect.height > 2 => vec![[Point::new(edges.left, edges.top + 1), Point::new(edges.right, edges.top + 1)]],
+            Self::Cylinder if rect.height > 2 => {
+                vec![[Point::new(edges.left, edges.top.saturating_add(1)), Point::new(edges.right, edges.top.saturating_add(1))]]
+            }
             _ => Vec::new(),
         }
     }
@@ -121,7 +123,11 @@ impl Shape {
     /// The marks replacing border cells, with a double circle's second bracket.
     pub(crate) fn marks(self, rect: Rect) -> Vec<Placed> {
         let edges = Edges::of(rect);
-        let inner = (self == Self::DoubleCircle && rect.width > 2).then(|| Edges { left: edges.left + 1, right: edges.right - 1, ..edges });
+        let inner = (self == Self::DoubleCircle && rect.width > 2).then(|| Edges {
+            left: edges.left.saturating_add(1),
+            right: edges.right - 1,
+            ..edges
+        });
         (0..rect.height)
             .flat_map(|row| {
                 let y = edges.top.saturating_add(row);
@@ -257,6 +263,18 @@ mod tests {
 
     fn every_shape(draw: impl Fn(Shape) -> Canvas, glyphs: GlyphSet) -> String {
         Shape::ALL.iter().map(|&shape| format!("{shape:?}\n{}", render(&draw(shape), glyphs))).collect::<Vec<_>>().join("\n\n")
+    }
+
+    /// Found by fuzzing: an inner line or a second bracket one cell inside a rectangle at the last column overflowed.
+    #[test]
+    fn a_shape_past_the_last_cell_draws_nothing() {
+        for shape in Shape::ALL {
+            let mut canvas = Canvas::new(2, 2).unwrap();
+
+            canvas.shape(Rect::new(u16::MAX, u16::MAX, 5, 5), shape, Role::Node);
+
+            assert_eq!(render(&canvas, GlyphSet::Unicode), "  \n  ", "{shape:?}");
+        }
     }
 
     #[test]
