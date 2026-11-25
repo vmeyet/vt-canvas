@@ -22,3 +22,4 @@ assert_eq!(rows, ["╭───╮    ╭───╮", "│ A ├───▸�
 ```
 
 `cargo run --example demo` draws a small flowchart with both glyph sets.
+`cargo run --example shapes` draws every node shape with both glyph sets.
