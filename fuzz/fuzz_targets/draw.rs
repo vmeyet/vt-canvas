@@ -5,7 +5,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use unicode_width::UnicodeWidthChar;
-use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, GlyphSet, LineKind, Pixel, Point, Rect, Shape, Tip, Wedge};
+use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, GlyphSet, LineKind, Pixel, Point, Rect, Shape, Symbol, Tip, Wedge};
 
 /// Wide enough to reach every clipping branch, small enough to keep each run fast.
 const MAX_SIDE: u16 = 64;
@@ -29,6 +29,7 @@ enum Operation {
     Path { points: Vec<(u16, u16)>, kind: u8, role: u8 },
     Frame { rect: (u16, u16, u16, u16), kind: u8, rounded: bool, role: u8 },
     Tip { at: (u16, u16), direction: u8, tip: u8, role: u8 },
+    Symbol { at: (u16, u16), symbol: u8, role: u8 },
     Shape { rect: (u16, u16, u16, u16), shape: u8, role: u8 },
     Column { x: u16, eighths: (u32, u32), role: u8 },
     Row { y: u16, eighths: (u32, u32), role: u8 },
@@ -72,6 +73,7 @@ fn apply(canvas: &mut Canvas<u8>, operation: &Operation) {
         Operation::Tip { at, direction, tip, role } => {
             canvas.tip(point(*at), self::direction(*direction), tip_kind(*tip), *role);
         }
+        Operation::Symbol { at, symbol, role } => canvas.symbol(point(*at), symbol_kind(*symbol), *role),
         Operation::Shape { rect, shape, role } => {
             canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], *role)
         }
@@ -108,6 +110,10 @@ fn fine(value: u32) -> u32 {
 
 fn tip_kind(byte: u8) -> Tip {
     [Tip::Arrow, Tip::Triangle, Tip::Diamond, Tip::FilledDiamond, Tip::Ring, Tip::Bar, Tip::Fork, Tip::Cross][usize::from(byte) % 8]
+}
+
+fn symbol_kind(byte: u8) -> Symbol {
+    [Symbol::Dot, Symbol::RingedDot, Symbol::FilledDiamond][usize::from(byte) % 3]
 }
 
 fn dots(byte: u8) -> Dots {

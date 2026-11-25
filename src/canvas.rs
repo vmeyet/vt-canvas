@@ -671,26 +671,40 @@ mod tests {
         assert_eq!(render(&canvas, GlyphSet::Ascii), "---x");
     }
 
-    #[test]
-    fn tips_face_the_node_their_edge_goes_into() {
-        let mut canvas = canvas(8, 3);
-        line(&mut canvas, (0, 1), (7, 1), LineKind::Light);
-        let tips = [
-            (0, Direction::Left, Tip::Fork),
-            (1, Direction::Left, Tip::Bar),
-            (2, Direction::Left, Tip::Triangle),
-            (3, Direction::Up, Tip::Diamond),
-        ];
-        let more = [(4, Direction::Down, Tip::FilledDiamond), (5, Direction::Right, Tip::Ring), (6, Direction::Right, Tip::Fork)];
-
-        for (x, direction, tip) in tips.into_iter().chain(more) {
-            canvas.tip(Point::new(x, 1), direction, tip, Part::Edge);
+    /// Each tip in each direction, one row per direction: `Tip::ALL` across, with a bar on a line of its own.
+    fn tips_facing_each_way() -> Canvas<Part> {
+        let mut canvas = canvas(8, 4);
+        for (y, direction) in (0..).zip(Direction::ALL) {
+            for (x, &tip) in (0..).zip(Tip::ALL) {
+                canvas.tip(Point::new(x, y), direction, tip, Part::Edge);
+            }
         }
-        canvas.tip(Point::new(7, 0), Direction::Down, Tip::Fork, Part::Edge);
-        canvas.tip(Point::new(7, 2), Direction::Up, Tip::Fork, Part::Edge);
+        canvas
+    }
 
-        assert_eq!(render(&canvas, GlyphSet::Unicode), "       Ʌ\n>┼◃⬦⬥o<─\n       V");
-        assert_eq!(render(&canvas, GlyphSet::Ascii), "       ^\n>+<o#o<-\n       v");
+    #[test]
+    fn arrows_triangles_and_forks_face_the_node_their_edge_goes_into() {
+        let canvas = tips_facing_each_way();
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "▴▵⬦⬥o┼V╳\n▸▹⬦⬥o┼<╳\n▾▿⬦⬥o┼Ʌ╳\n◂◃⬦⬥o┼>╳");
+    }
+
+    #[test]
+    fn tips_in_ascii_keep_their_direction() {
+        let canvas = tips_facing_each_way();
+
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "^^o#o+vx\n>>o#o+<x\nvvo#o+^x\n<<o#o+>x");
+    }
+
+    #[test]
+    fn a_tip_on_a_line_stays_whole_but_a_bar_merges_with_it() {
+        let mut canvas = canvas(4, 1);
+        line(&mut canvas, (0, 0), (3, 0), LineKind::Light);
+
+        canvas.tip(Point::new(1, 0), Direction::Left, Tip::Bar, Part::Edge);
+        canvas.tip(Point::new(2, 0), Direction::Left, Tip::Triangle, Part::Edge);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "─┼◃─");
     }
 
     #[test]
@@ -716,13 +730,29 @@ mod tests {
     }
 
     #[test]
-    fn a_tip_drawn_on_a_symbol_replaces_it() {
-        let mut canvas = canvas(2, 1);
-        canvas.symbol(Point::new(1, 0), Symbol::Dot, Part::Node);
+    fn a_tip_drawn_on_a_symbol_or_a_mark_replaces_it() {
+        let mut canvas = canvas(5, 3);
+        canvas.symbol(Point::new(0, 1), Symbol::Dot, Part::Node);
+        canvas.shape(Rect::new(1, 0, 4, 3), Shape::Stadium, Part::Node);
 
-        canvas.tip(Point::new(1, 0), Direction::Right, Tip::Arrow, Part::Edge);
+        canvas.tip(Point::new(0, 1), Direction::Right, Tip::Arrow, Part::Edge);
+        canvas.tip(Point::new(1, 1), Direction::Right, Tip::Arrow, Part::Edge);
 
-        assert_eq!(render(&canvas, GlyphSet::Unicode), " ▸");
+        assert_eq!(render(&canvas, GlyphSet::Unicode), " ╭──╮\n▸▸  )\n ╰──╯");
+    }
+
+    #[test]
+    fn errors_say_what_was_refused() {
+        let too_large = Error::TooLarge { width: 2000, height: 1 };
+        let diagonal = Error::Diagonal { from: Point::new(0, 0), to: Point::new(2, 3) };
+
+        assert_eq!(
+            [too_large, diagonal].map(|error| error.to_string()),
+            [
+                "a 2000x1 canvas is over the limit of 1000 columns or 1000000 cells",
+                "a path's step from (0, 0) to (2, 3) is neither horizontal nor vertical"
+            ]
+        );
     }
 
     #[test]
@@ -1197,6 +1227,35 @@ mod tests {
             prop_oneof![9 => 0..u32::from(REACH) * 8, 1 => Just(u32::MAX)]
         }
 
+        /// A drawing on whole cells other than text, lines and frames.
+        #[derive(Debug, Clone)]
+        enum Figure {
+            Shape(Rect, Shape),
+            Path(Vec<Point>, LineKind),
+            Tip(Point, Direction, Tip),
+            Symbol(Point, Symbol),
+        }
+
+        fn figure() -> impl Strategy<Value = Figure> {
+            let direction = prop::sample::select(Direction::ALL.to_vec());
+            prop_oneof![
+                (point(), point(), prop::sample::select(Shape::ALL))
+                    .prop_map(|(at, size, shape)| Figure::Shape(Rect::new(at.x, at.y, size.x, size.y), shape)),
+                (path(), kind()).prop_map(|(points, kind)| Figure::Path(points, kind)),
+                (point(), direction, prop::sample::select(Tip::ALL)).prop_map(|(at, direction, tip)| Figure::Tip(at, direction, tip)),
+                (point(), prop::sample::select(Symbol::ALL)).prop_map(|(at, symbol)| Figure::Symbol(at, symbol)),
+            ]
+        }
+
+        fn draw_figure(canvas: &mut Canvas<Part>, figure: Figure) {
+            match figure {
+                Figure::Shape(rect, shape) => canvas.shape(rect, shape, Part::Node),
+                Figure::Path(points, kind) => canvas.path(&points, kind, Part::Edge).unwrap(),
+                Figure::Tip(at, direction, tip) => canvas.tip(at, direction, tip, Part::Edge),
+                Figure::Symbol(at, symbol) => canvas.symbol(at, symbol, Part::Node),
+            }
+        }
+
         #[derive(Debug, Clone)]
         enum Fine {
             Column(u16, Range<u32>),
@@ -1235,6 +1294,7 @@ mod tests {
                 texts in prop::collection::vec((point(), "[a漢\u{301}\u{200b}\t\u{1b} ]{0,8}", 0..12u16), 0..6),
                 lines in prop::collection::vec((straight(), kind()), 0..6),
                 frames in prop::collection::vec((point(), point(), kind()), 0..3),
+                figures in prop::collection::vec(figure(), 0..6),
                 fines in prop::collection::vec((finer_than_a_cell(), 0..3u8), 0..8),
                 glyphs in prop_oneof![Just(GlyphSet::Unicode), Just(GlyphSet::Unicode13), Just(GlyphSet::Unicode3), Just(GlyphSet::Ascii)],
             ) {
@@ -1247,6 +1307,9 @@ mod tests {
                 }
                 for (corner, size, kind) in frames {
                     canvas.frame(Rect::new(corner.x, corner.y, size.x, size.y), kind, Corner::Rounded, Part::Node);
+                }
+                for figure in figures {
+                    draw_figure(&mut canvas, figure);
                 }
                 for (at, text, max_width) in &texts {
                     canvas.text_cut(*at, text, *max_width, Part::Label);
@@ -1274,6 +1337,29 @@ mod tests {
 
                 let whole = || vec![Run { text: "█".repeat(8), role: Part::Series(0), background: None }];
                 prop_assert_eq!(canvas.rows(GlyphSet::Unicode).collect::<Vec<_>>(), [whole(), whole()]);
+            }
+
+            #[test]
+            fn a_tip_or_a_symbol_stays_whole_under_the_lines_drawn_after_it(
+                (at, direction) in (point(), prop::sample::select(Direction::ALL.to_vec())),
+                tip in prop::sample::select(Tip::ALL).prop_filter("a bar is a line", |tip| *tip != Tip::Bar),
+                symbol in prop::sample::select(Symbol::ALL),
+                lines in prop::collection::vec(path(), 1..4),
+            ) {
+                let mut tipped = canvas(16, 16);
+                let mut marked = canvas(16, 16);
+                tipped.tip(at, direction, tip, Part::Edge);
+                marked.symbol(at, symbol, Part::Node);
+                let (tip_alone, symbol_alone) = (tipped.clone(), marked.clone());
+
+                for points in lines {
+                    tipped.path(&points, LineKind::Heavy, Part::Edge).unwrap();
+                    marked.path(&points, LineKind::Heavy, Part::Edge).unwrap();
+                }
+
+                let cell = |canvas: &Canvas<Part>| canvas.index(at).map(|index| canvas.cells[index]);
+                prop_assert_eq!(cell(&tipped), cell(&tip_alone));
+                prop_assert_eq!(cell(&marked), cell(&symbol_alone));
             }
 
             #[test]

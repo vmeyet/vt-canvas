@@ -168,5 +168,5 @@ vt-canvas exposes `text_width` so its callers measure text the way it draws it.
 
 ## Fuzzing and properties
 
-- `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames, tips and shapes, then checks that every row is exactly the canvas's width.
-- The proptest properties in `canvas` keep the same check in `cargo test` for every glyph set, plus a line drawn from either end, a line drawn twice, a path drawn as its lines, and a whole block covering whatever was drawn.
+- `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames, shapes, tips, symbols and drawings finer than a cell, then checks that every row is exactly the canvas's width.
+- The proptest properties in `canvas` keep the same check in `cargo test` for every glyph set and every kind of drawing, plus a line drawn from either end, a line drawn twice, a path drawn as its lines, a tip or a symbol kept under the lines drawn after it, and a whole block covering whatever was drawn.
