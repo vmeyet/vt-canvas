@@ -50,9 +50,13 @@ pub(crate) struct Stroke {
 }
 
 impl Stroke {
-    /// The cell row a stroke `eighth` eighths of a row below the top of the canvas is in, and the stroke in that cell.
-    pub(crate) const fn at(eighth: u32) -> (u32, Self) {
-        (eighth / EIGHTHS as u32, Self { level: (eighth % EIGHTHS as u32) as u8 })
+    /// The stroke `eighth` eighths of a row below the top of the canvas, in the cell of the row [`row`](Self::row) gives.
+    pub(crate) const fn at(eighth: u32) -> Self {
+        Self { level: (eighth % EIGHTHS as u32) as u8 }
+    }
+
+    pub(crate) const fn row(eighth: u32) -> usize {
+        (eighth / EIGHTHS as u32) as usize
     }
 
     /// Without the Legacy Computing lines a stroke is the nearest of the top of the cell, its middle and its bottom.
@@ -147,17 +151,24 @@ const fn coarse(eighths: u8) -> u8 {
     }
 }
 
-/// The block of each cell a stretch covers, the cells counted along the stretch.
+/// A block and the cell it is in, counted along a column or a row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Placed {
+    pub(crate) cell: usize,
+    pub(crate) block: Block,
+}
+
+/// The block of each cell a stretch covers.
 ///
 /// `eighths` counts eighths of a cell from the first of `cells` cells, whose side `low_side` faces the start; what is past the last cell is cut.
-pub(crate) fn span(eighths: Range<u32>, cells: usize, low_side: Direction) -> impl Iterator<Item = (usize, Block)> {
+pub(crate) fn span(eighths: Range<u32>, cells: usize, low_side: Direction) -> impl Iterator<Item = Placed> {
     let per_cell = u32::from(EIGHTHS);
     let end = eighths.end.min(u32::try_from(cells).unwrap_or(u32::MAX).saturating_mul(per_cell));
     let start = eighths.start.min(end);
     (start / per_cell..end.div_ceil(per_cell)).filter(move |_| start < end).map(move |cell| {
         let low = start.saturating_sub(cell * per_cell);
         let high = (end - cell * per_cell).min(per_cell);
-        (cell as usize, Block::between(low as u8, high as u8, low_side))
+        Placed { cell: cell as usize, block: Block::between(low as u8, high as u8, low_side) }
     })
 }
 
@@ -175,7 +186,7 @@ pub(crate) mod tests {
     fn strokes_sit_at_each_eighth_in_each_glyph_set() {
         let table: Vec<String> = SETS
             .into_iter()
-            .map(|glyphs| format!("{glyphs:?}: {}", (0..8).map(|eighth| Stroke::at(eighth).1.glyph(glyphs)).collect::<String>()))
+            .map(|glyphs| format!("{glyphs:?}: {}", (0..8).map(|eighth| Stroke::at(eighth).glyph(glyphs)).collect::<String>()))
             .collect();
 
         insta::assert_snapshot!(table.join("\n"));
@@ -183,11 +194,11 @@ pub(crate) mod tests {
 
     #[test]
     fn a_stroke_is_in_the_row_its_eighth_falls_in() {
-        assert_eq!(Stroke::at(21), (2, Stroke { level: 5 }));
+        assert_eq!((Stroke::row(21), Stroke::at(21)), (2, Stroke { level: 5 }));
     }
 
     fn blocks(cells: usize, eighths: Range<u32>) -> Vec<(usize, Block)> {
-        span(eighths, cells, Direction::Up).collect()
+        span(eighths, cells, Direction::Up).map(|placed| (placed.cell, placed.block)).collect()
     }
 
     #[test]

@@ -156,24 +156,32 @@ enum Cell {
 }
 
 impl Cell {
-    /// How much of the cell this glyph fills, from which side and in which role, when it is one that fills.
-    const fn cover(self) -> Option<(Cover, Role)> {
+    /// How much of the cell this glyph fills and from which side, when it is one that fills.
+    const fn cover(self) -> Option<Cover> {
         match self {
-            Self::Block { block, role } => Some((block.cover(), role)),
-            Self::Wedge { wedge, role } => Some((wedge.cover(), role)),
+            Self::Block { block, .. } => Some(block.cover()),
+            Self::Wedge { wedge, .. } => Some(wedge.cover()),
             Self::Halves(halves) => halves.cover(),
+            _ => None,
+        }
+    }
+
+    /// The role a glyph that fills is drawn in.
+    const fn filled_in(self) -> Option<Role> {
+        match self {
+            Self::Block { role, .. } | Self::Wedge { role, .. } => Some(role),
+            Self::Halves(halves) => halves.lowest(),
             _ => None,
         }
     }
 
     /// The role `over`, drawn on this cell, keeps behind it: this cell's, when it fills at least half of what `over` leaves.
     fn behind(self, over: Self) -> Option<Role> {
-        let (cover, role) = self.cover()?;
-        cover.shows_behind(over.cover().map(|(over, _)| over)).then_some(role)
+        self.cover().filter(|cover| cover.shows_behind(over.cover())).and(self.filled_in())
     }
 
     const fn fills_cell(self) -> bool {
-        matches!(self.cover(), Some((cover, _)) if cover.parts >= Cover::WHOLE)
+        matches!(self.cover(), Some(cover) if cover.parts >= Cover::WHOLE)
     }
 }
 
@@ -313,15 +321,15 @@ impl Canvas {
     /// A bar standing on the bottom of row 9 and 2.5 rows tall is `column(x, 60..80, role)`.
     /// A stretch that touches neither end of its cell has no glyph, so it moves to the end it is nearer.
     pub fn column(&mut self, x: u16, eighths: Range<u32>, role: Role) {
-        for (y, block) in block::span(eighths, self.height, Direction::Up) {
-            self.put(usize::from(x), y, Cell::Block { block, role });
+        for placed in block::span(eighths, self.height, Direction::Up) {
+            self.put(usize::from(x), placed.cell, Cell::Block { block: placed.block, role });
         }
     }
 
     /// Fills row `y` between two offsets, each counted in eighths of a column from the left of the canvas.
     pub fn row(&mut self, y: u16, eighths: Range<u32>, role: Role) {
-        for (x, block) in block::span(eighths, self.width, Direction::Left) {
-            self.put(x, usize::from(y), Cell::Block { block, role });
+        for placed in block::span(eighths, self.width, Direction::Left) {
+            self.put(placed.cell, usize::from(y), Cell::Block { block: placed.block, role });
         }
     }
 
@@ -334,8 +342,7 @@ impl Canvas {
 
     /// Draws a line one eighth of a row thick across column `x`, `eighth` eighths of a row below the top of the canvas.
     pub fn stroke(&mut self, x: u16, eighth: u32, role: Role) {
-        let (y, stroke) = Stroke::at(eighth);
-        self.put(usize::from(x), y as usize, Cell::Stroke { stroke, role });
+        self.put(usize::from(x), Stroke::row(eighth), Cell::Stroke { stroke: Stroke::at(eighth), role });
     }
 
     /// Lights the dot `at` of the grid `dots` cuts the cells into.

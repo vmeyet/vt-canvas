@@ -169,15 +169,20 @@ impl Halves {
         if bit == 0b01 { Self { top: Some(role), ..self } } else { Self { bottom: Some(role), ..self } }
     }
 
-    /// One half lit is a block half a cell tall, so it may stay behind what is drawn over it; of two halves, the lower one's role does.
-    pub(crate) const fn cover(self) -> Option<(Cover, Role)> {
+    /// One half lit is a block half a cell tall, so it may stay behind what is drawn over it.
+    pub(crate) const fn cover(self) -> Option<Cover> {
         let half = Cover::WHOLE / 2;
         match (self.top, self.bottom) {
             (None, None) => None,
-            (Some(top), None) => Some((Cover { from: Direction::Up, parts: half }, top)),
-            (None, Some(bottom)) => Some((Cover { from: Direction::Down, parts: half }, bottom)),
-            (Some(_), Some(bottom)) => Some((Cover { from: Direction::Down, parts: Cover::WHOLE }, bottom)),
+            (Some(_), None) => Some(Cover { from: Direction::Up, parts: half }),
+            (None, Some(_)) => Some(Cover { from: Direction::Down, parts: half }),
+            (Some(_), Some(_)) => Some(Cover { from: Direction::Down, parts: Cover::WHOLE }),
         }
+    }
+
+    /// The role that stays behind a drawing over the cell: the lower half's, when both are lit.
+    pub(crate) const fn lowest(self) -> Option<Role> {
+        if self.bottom.is_some() { self.bottom } else { self.top }
     }
 
     pub(crate) const fn fills_cell(self) -> bool {
