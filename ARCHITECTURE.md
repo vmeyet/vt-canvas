@@ -52,7 +52,7 @@ This page says how the code is laid out today; when a module or a boundary chang
   `Role` asks for `Copy + Eq + Default`, the default being the role of empty cells, and an ASCII `texture`, 0 unless told otherwise, so roles differ without colour; a `u8` is a role whose texture is itself.
 - Output: `rows` yields each row as runs of text sharing a role and a background, without `\n`; `lines` yields each row's text alone.
   A run's `background` is the role behind its characters, `None` where nothing is.
-- Cost at the cell limit, measured on an Apple M5 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 4 ms and reads back in 8 ms; a bar in every column under a line of octant dots across every row draws in 17 ms and reads back in 5 ms.
+- Cost at the cell limit, medians measured on an Apple M5 on 2026-11-26 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 4.6 ms and reads back in 4.4 ms; a bar in every column under a line of octant dots across every row draws in 18 ms and reads back in 4.5 ms; a row of text on every row draws in 3.6 ms.
   With a role of 2 bytes, a cell takes 8 bytes and its background 2, so the canvas holds 10 MB.
 
 ## Finer than a cell

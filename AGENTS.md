@@ -1,12 +1,13 @@
 # Working in this repo
 
-`vt-canvas` is a Rust library: A terminal cell grid: text, lines and boxes with junction merging, glyph sets; returns styled cells, never ANSI.
+`vt-canvas` is a Rust library: a terminal cell grid: text, lines and boxes with junction merging, finer than a cell, glyph sets; returns styled cells, never ANSI.
 Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first.
 The code is the contract; `ARCHITECTURE.md` describes it, and a change to a module or a boundary updates it in the same change.
 
 ## Ground rules
 
 - One change a reviewer can read in one sitting, under 500 changed lines excluding fixtures and snapshots.
+- A source file stays up to about 1000 lines, its tests included; past that, split it by concept.
 - Branches: `<scope>/<kebab-title>` with scope in `feat fix chore refactor docs test ci`.
 - Worktrees live in `.claude/worktrees/<scope>+<kebab-title>`, share the repo's build dir through `CARGO_TARGET_DIR=<repo>/target`, and are removed once merged.
 - Commits follow conventional commits; body in two short imperative sentences at most. No co-author trailers.
@@ -29,7 +30,7 @@ The code is the contract; `ARCHITECTURE.md` describes it, and a change to a modu
 ## Purity and bounds
 
 - The library is pure: no I/O, no printing, no environment, no process exit.
-- Output is styled cells whose colours are *roles* (node, edge, label, series…), never ANSI escapes; the caller maps roles to a palette and writes the terminal.
+- Output is styled cells whose colours are *roles* of the caller's own type, never ANSI escapes; the caller maps roles to a palette and writes the terminal.
 - Input is untrusted, so work is bounded before it starts: every size has an upper limit, tested at the limit and over it.
 - Errors are typed; a limit hit is an error the caller can match, never a panic.
 

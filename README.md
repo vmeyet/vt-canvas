@@ -1,8 +1,17 @@
 # vt-canvas
 
-A terminal cell grid: text, lines and boxes with junction merging, glyph sets; returns styled cells, never ANSI.
-It is a pure library: it returns styled cells with colour roles and never writes to the terminal, so the caller (mrk first) applies the theme, sanitizes and prints.
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for what it owns and [`AGENTS.md`](AGENTS.md) for how to work on it.
+A terminal cell grid: text, lines and boxes with junction merging, drawings finer than a cell, glyph sets; returns styled cells, never ANSI.
+
+It is a pure library.
+Each cell carries a *role* of the caller's own type, so the caller maps roles to colours, sanitizes and writes the terminal; vt-canvas never prints, reads the environment or knows what a diagram is.
+
+```sh
+cargo add vt-canvas
+```
+
+The minimum supported Rust version is 1.92.
+
+## Example
 
 ```rust
 use vt_canvas::{Canvas, Corner, Direction, GlyphSet, LineKind, Point, Rect, Role, Tip};
@@ -31,6 +40,28 @@ assert_eq!(lines, ["╭───╮    ╭───╮", "│ A ├───▸�
 # Ok::<(), vt_canvas::Error>(())
 ```
 
-`cargo run --example demo` draws a small flowchart with both glyph sets.
-`cargo run --example shapes` draws every node shape with both glyph sets.
-`cargo run --example pixels` draws blocks, a stroke, wedges and each kind of dots with every glyph set.
+`Canvas::rows` gives the same rows as runs of text sharing a role and a background, for the caller to colour.
+
+## What it draws
+
+- Text, cut at a width with an ellipsis, wide characters taking two cells.
+- Horizontal and vertical lines and paths, light, heavy, double or dashed, whose crossings merge into the right junction (`┼ ╋ ╪ ┤`).
+- Frames and 14 node shapes (rectangle, stadium, diamond, hexagon, cylinder…), tips at an edge's end (arrows, triangles, diamonds, a crow's foot's parts) and one-cell symbols.
+- Finer than a cell: bars by eighths of a cell, lines one eighth thick, wedges under a slanted edge, and dots on braille, octant, sextant, quadrant or half-block grids, with two roles per cell where the terminal allows it.
+- Every drawing in four glyph sets, from `Unicode` (octants of Unicode 16) down to `Ascii`, each glyph falling back to the closest one the set holds; no glyph of the Unicode sets is East Asian ambiguous outside box drawing and block elements.
+
+## Limits
+
+- A canvas holds at most 1000 columns and 1000000 cells; drawing past its edges is clipped, never an error.
+- A cell holds one character: combining marks and other zero-width characters are left out, so a decomposed `é` (`e` then U+0301) draws as `e`.
+  Normalize text to NFC first; scripts that need shaping or joining across cells are not drawn right.
+
+## Learn more
+
+- [`ARCHITECTURE.md`](https://github.com/vmeyet/vt-canvas/blob/main/ARCHITECTURE.md): what the crate owns, its contract, the junction and layer rules.
+- [`AGENTS.md`](https://github.com/vmeyet/vt-canvas/blob/main/AGENTS.md): how to work on it.
+- `cargo run --example demo`, `--example shapes` and `--example pixels` draw a small flowchart, every shape, and the drawings finer than a cell in every glyph set.
+
+## License
+
+MIT
