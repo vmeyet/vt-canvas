@@ -672,4 +672,104 @@ mod tests {
         let run = |text: &str, role| Run { text: text.to_owned(), role };
         assert_eq!(runs, [run(" ", Role::Plain), run("ab", Role::Label), run("──", Role::Edge), run(" ", Role::Plain)]);
     }
+
+    mod properties {
+        use proptest::prelude::*;
+        use unicode_width::UnicodeWidthChar;
+
+        use super::*;
+
+        /// Points reach past the canvas, so every property also holds while clipping.
+        const REACH: u16 = 24;
+
+        fn point() -> impl Strategy<Value = Point> {
+            (0..REACH, 0..REACH).prop_map(|(x, y)| Point::new(x, y))
+        }
+
+        fn kind() -> impl Strategy<Value = LineKind> {
+            prop_oneof![Just(LineKind::Light), Just(LineKind::Heavy), Just(LineKind::Double), Just(LineKind::Dashed)]
+        }
+
+        fn straight() -> impl Strategy<Value = (Point, Point)> {
+            (point(), 0..REACH, any::<bool>())
+                .prop_map(|(from, to, horizontal)| if horizontal { (from, Point::new(to, from.y)) } else { (from, Point::new(from.x, to)) })
+        }
+
+        /// A path without a diagonal step: each point shares a row or a column with the one before.
+        fn path() -> impl Strategy<Value = Vec<Point>> {
+            (point(), prop::collection::vec((0..REACH, any::<bool>()), 0..6)).prop_map(|(start, turns)| {
+                turns.into_iter().fold(vec![start], |mut points, (to, horizontal)| {
+                    let last = points[points.len() - 1];
+                    points.push(if horizontal { Point::new(to, last.y) } else { Point::new(last.x, to) });
+                    points
+                })
+            })
+        }
+
+        fn rows(canvas: &Canvas) -> Vec<String> {
+            canvas.rows(GlyphSet::Unicode).map(|runs| runs.into_iter().map(|run| run.text).collect()).collect()
+        }
+
+        proptest! {
+            #[test]
+            fn every_row_is_as_wide_as_the_canvas(
+                (width, height) in (0..16u16, 0..16u16),
+                texts in prop::collection::vec((point(), "[a漢\u{301}\u{200b}\t\u{1b} ]{0,8}", 0..12u16), 0..6),
+                lines in prop::collection::vec((straight(), kind()), 0..6),
+                frames in prop::collection::vec((point(), point(), "[b漢 ]{0,6}"), 0..3),
+            ) {
+                let mut canvas = canvas(width, height);
+                for ((from, to), kind) in lines {
+                    canvas.line(from, to, kind, Role::Edge).unwrap();
+                }
+                for (corner, size, title) in &frames {
+                    canvas.frame(Rect::new(corner.x, corner.y, size.x, size.y), Frame { title: Some(title), ..NODE });
+                }
+                for (at, text, max_width) in &texts {
+                    canvas.text_cut(*at, text, *max_width, Role::Label);
+                }
+
+                for row in rows(&canvas) {
+                    let columns: usize = row.chars().map(|char| char.width().unwrap_or(0)).sum();
+                    prop_assert_eq!(columns, usize::from(width), "row {:?}", row);
+                }
+            }
+
+            #[test]
+            fn a_line_draws_the_same_from_either_end(((from, to), kind) in (straight(), kind())) {
+                let mut forward = canvas(16, 16);
+                let mut backward = canvas(16, 16);
+
+                forward.line(from, to, kind, Role::Edge).unwrap();
+                backward.line(to, from, kind, Role::Edge).unwrap();
+
+                prop_assert_eq!(forward, backward);
+            }
+
+            #[test]
+            fn drawing_a_line_twice_changes_nothing(((from, to), kind) in (straight(), kind()), path in path()) {
+                let mut once = canvas(16, 16);
+                once.path(&path, LineKind::Light, Role::Edge).unwrap();
+                once.line(from, to, kind, Role::Edge).unwrap();
+                let mut twice = once.clone();
+
+                twice.line(from, to, kind, Role::Edge).unwrap();
+
+                prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn a_path_draws_a_line_from_each_point_to_the_next(points in path(), kind in kind()) {
+                let mut path = canvas(16, 16);
+                let mut lines = canvas(16, 16);
+
+                path.path(&points, kind, Role::Edge).unwrap();
+                for pair in points.windows(2) {
+                    lines.line(pair[0], pair[1], kind, Role::Edge).unwrap();
+                }
+
+                prop_assert_eq!(path, lines);
+            }
+        }
+    }
 }
