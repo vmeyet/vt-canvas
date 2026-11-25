@@ -19,6 +19,14 @@ impl GlyphSet {
         }
     }
 
+    /// `⋯`, not `…`, which is East Asian ambiguous.
+    pub(crate) fn ellipsis(self) -> char {
+        match self {
+            Self::Unicode => '⋯',
+            Self::Ascii => '~',
+        }
+    }
+
     pub(crate) fn arrow(self, direction: Direction) -> char {
         match (self, direction) {
             (Self::Unicode, Direction::Up) => '▴',
@@ -178,7 +186,7 @@ mod tests {
         });
         let lines = all_sides.flat_map(|sides| [false, true].map(|rounded| GlyphSet::Unicode.line(sides, rounded)));
         let arrows = Direction::ALL.map(|direction| GlyphSet::Unicode.arrow(direction));
-        lines.chain(arrows).filter(|glyph| *glyph != ' ').collect()
+        lines.chain(arrows).chain([GlyphSet::Unicode.ellipsis()]).filter(|glyph| *glyph != ' ').collect()
     }
 
     #[test]

@@ -32,13 +32,15 @@ Sub-cell pixels and layers come with the charts.
 
 ## Contract
 
-- Size: `Canvas::new` refuses more than 1000 columns (`MAX_WIDTH`) or 1000 rows (`MAX_HEIGHT`) with `Error::TooLarge`.
+- Size: `Canvas::new` refuses more than 1000 columns (`MAX_WIDTH`) or 1000000 cells (`MAX_CELLS`, width times height) with `Error::TooLarge`, so a narrow drawing can be tall.
 - Clipping: drawing out of bounds is cut at the edges, never an error, never a panic.
 - Lines are horizontal or vertical; a diagonal is `Error::Diagonal`.
   A line with both ends on one cell draws nothing.
+  A path is a line from each point to the next, turning a corner at each point between; a diagonal step refuses the whole path before anything is drawn.
 - Overwriting: the last drawing on a cell wins, except that a line drawn on a line merges with it.
   Writing over either half of a wide character blanks the other half; a wide character without room for both halves is not drawn.
 - Text: control and zero-width characters are left out, so every row is exactly as wide as the canvas.
+  `text_cut` cuts text to a width and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
 - Roles: `Plain`, `Node`, `Edge`, `Label`, `Group`; the caller maps each one to a colour.
 - Output: `rows` yields each row as runs of text sharing a role, without `\n`.
 
@@ -53,6 +55,10 @@ The rules, applied in order:
 4. A rounded corner is an arc (`╭`) only when its two sides are light; a heavy or double corner stays square, and a corner a line joins becomes a junction.
 5. Light and heavy mix freely: Unicode has every combination (`┽ ┿ ╀ ╆`).
 6. Double mixes with light only axis by axis (`╪ ╫ ╞`): an axis with a double side is all double, and heavy elsewhere becomes light, as Unicode has no heavy and double glyph.
+
+Two lines crossing draw `┼`, never a "pass over" where the line drawn first stays whole.
+Tried on the flowchart spike's output: frames are drawn before edges, so a pass over cut every edge where it left a group, which read as the edge ending at the frame; between two edges it broke one of them, which made it harder to follow.
+Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a join.
 
 The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy or double, `.` when dashed, and a vertical run as `|`, `:` when dashed.
 Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.

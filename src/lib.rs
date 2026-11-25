@@ -6,7 +6,7 @@ mod glyph;
 mod line;
 mod text;
 
-pub use canvas::{Canvas, Corner, Error, Frame, MAX_HEIGHT, MAX_WIDTH, Role, Run};
+pub use canvas::{Canvas, Corner, Error, Frame, MAX_CELLS, MAX_WIDTH, Role, Run};
 pub use geometry::{Direction, Point, Rect};
 pub use glyph::GlyphSet;
 pub use line::LineKind;

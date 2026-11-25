@@ -7,8 +7,8 @@ use crate::text;
 
 /// Widest canvas [`Canvas::new`] accepts, in columns.
 pub const MAX_WIDTH: u16 = 1_000;
-/// Tallest canvas [`Canvas::new`] accepts, in rows.
-pub const MAX_HEIGHT: u16 = 1_000;
+/// Most cells [`Canvas::new`] accepts, width times height: a narrow canvas can be tall.
+pub const MAX_CELLS: usize = 1_000_000;
 
 /// What a cell is drawn for; the caller maps each role to a colour.
 #[non_exhaustive]
@@ -63,7 +63,7 @@ pub struct Frame<'a> {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
-    /// The canvas would be wider than [`MAX_WIDTH`] or taller than [`MAX_HEIGHT`].
+    /// The canvas would be wider than [`MAX_WIDTH`] or hold more than [`MAX_CELLS`] cells.
     TooLarge {
         /// Columns asked for.
         width: u16,
@@ -83,7 +83,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::TooLarge { width, height } => {
-                write!(f, "a {width}x{height} canvas is over the {MAX_WIDTH}x{MAX_HEIGHT} limit")
+                write!(f, "a {width}x{height} canvas is over the limit of {MAX_WIDTH} columns or {MAX_CELLS} cells")
             }
             Self::Diagonal { from, to } => {
                 write!(f, "a line from ({}, {}) to ({}, {}) is neither horizontal nor vertical", from.x, from.y, to.x, to.y)
@@ -104,6 +104,10 @@ enum Cell {
     },
     /// The right half of the wide character in the cell to its left.
     WideTail,
+    /// Marks where [`Canvas::text_cut`] cut its text.
+    Ellipsis {
+        role: Role,
+    },
     Line {
         sides: Sides,
         rounded: bool,
@@ -126,18 +130,29 @@ pub struct Canvas {
 }
 
 impl Canvas {
-    /// An empty canvas, `width` columns by `height` rows, at most [`MAX_WIDTH`] by [`MAX_HEIGHT`].
+    /// An empty canvas, `width` columns by `height` rows, at most [`MAX_WIDTH`] columns and [`MAX_CELLS`] cells.
     pub fn new(width: u16, height: u16) -> Result<Self, Error> {
-        if width > MAX_WIDTH || height > MAX_HEIGHT {
+        let (columns, rows) = (usize::from(width), usize::from(height));
+        if width > MAX_WIDTH || columns * rows > MAX_CELLS {
             return Err(Error::TooLarge { width, height });
         }
-        let (width, height) = (usize::from(width), usize::from(height));
-        Ok(Self { width, height, cells: vec![Cell::Empty; width * height] })
+        Ok(Self { width: columns, height: rows, cells: vec![Cell::Empty; columns * rows] })
     }
 
     /// Writes `text` on one row from `at`, cut at the right edge; see [`width`](crate::width) for what it leaves out.
     pub fn text(&mut self, at: Point, text: &str, role: Role) {
         self.write(usize::from(at.x), usize::from(at.y), text, role, self.width);
+    }
+
+    /// Writes `text` like [`text`](Self::text), cut to `max_width` columns, its last column an ellipsis when cut.
+    pub fn text_cut(&mut self, at: Point, text: &str, max_width: u16, role: Role) {
+        let (x, y, max_width) = (usize::from(at.x), usize::from(at.y), usize::from(max_width));
+        if text::width(text) <= max_width {
+            self.write(x, y, text, role, x + max_width);
+        } else if max_width > 0 {
+            let end = self.write(x, y, text, role, x + max_width - 1);
+            self.put(end, y, Cell::Ellipsis { role });
+        }
     }
 
     /// Draws a horizontal or vertical line, both ends included; a cell it shares with another line becomes a junction.
@@ -146,6 +161,19 @@ impl Canvas {
             return Err(Error::Diagonal { from, to });
         }
         self.straight(from, to, kind, role);
+        Ok(())
+    }
+
+    /// Draws a line from each point to the next, so they turn a corner at every point between the ends.
+    ///
+    /// A pair of consecutive points sharing neither a row nor a column is refused before anything is drawn.
+    pub fn path(&mut self, points: &[Point], kind: LineKind, role: Role) -> Result<(), Error> {
+        if let Some(&[from, to]) = points.windows(2).find(|pair| pair[0].x != pair[1].x && pair[0].y != pair[1].y) {
+            return Err(Error::Diagonal { from, to });
+        }
+        for pair in points.windows(2) {
+            self.straight(pair[0], pair[1], kind, role);
+        }
         Ok(())
     }
 
@@ -271,6 +299,7 @@ fn runs(cells: &[Cell], glyphs: GlyphSet) -> Vec<Run> {
             Cell::Text { char, role } => (char, role),
             Cell::Line { sides, rounded, role } => (glyphs.line(sides, rounded), role),
             Cell::Arrow { direction, role } => (glyphs.arrow(direction), role),
+            Cell::Ellipsis { role } => (glyphs.ellipsis(), role),
         };
         match runs.last_mut() {
             Some(run) if run.role == role => run.text.push(char),
@@ -303,17 +332,35 @@ mod tests {
         canvas.line(Point::new(from.0, from.1), Point::new(to.0, to.1), kind, Role::Edge).unwrap();
     }
 
-    #[test]
-    fn a_canvas_at_the_size_limit_is_accepted() {
-        let canvas = canvas(MAX_WIDTH, MAX_HEIGHT);
-
-        assert_eq!(canvas.rows(GlyphSet::Unicode).count(), usize::from(MAX_HEIGHT));
+    fn tallest_full_width() -> u16 {
+        u16::try_from(MAX_CELLS / usize::from(MAX_WIDTH)).unwrap()
     }
 
     #[test]
-    fn a_canvas_over_the_size_limit_is_refused() {
+    fn a_canvas_at_the_cell_limit_is_accepted() {
+        let canvas = canvas(MAX_WIDTH, tallest_full_width());
+
+        assert_eq!(canvas.rows(GlyphSet::Unicode).count(), usize::from(tallest_full_width()));
+    }
+
+    #[test]
+    fn a_narrow_canvas_can_be_tens_of_thousands_of_rows_tall() {
+        let canvas = canvas(10, u16::MAX);
+
+        assert_eq!(canvas.rows(GlyphSet::Unicode).count(), usize::from(u16::MAX));
+    }
+
+    #[test]
+    fn a_canvas_over_the_cell_limit_is_refused() {
+        assert_eq!(
+            Canvas::new(MAX_WIDTH, tallest_full_width() + 1),
+            Err(Error::TooLarge { width: MAX_WIDTH, height: tallest_full_width() + 1 })
+        );
+    }
+
+    #[test]
+    fn a_canvas_over_the_width_limit_is_refused() {
         assert_eq!(Canvas::new(MAX_WIDTH + 1, 1), Err(Error::TooLarge { width: MAX_WIDTH + 1, height: 1 }));
-        assert_eq!(Canvas::new(1, MAX_HEIGHT + 1), Err(Error::TooLarge { width: 1, height: MAX_HEIGHT + 1 }));
     }
 
     #[test]
@@ -424,6 +471,64 @@ mod tests {
         line(&mut canvas, (0, 0), (0, 0), LineKind::Light);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "a");
+    }
+
+    #[test]
+    fn text_cut_keeps_text_that_fits() {
+        let mut canvas = canvas(6, 1);
+
+        canvas.text_cut(Point::new(0, 0), "abcd", 4, Role::Label);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "abcd  ");
+    }
+
+    #[test]
+    fn text_cut_ends_cut_text_on_an_ellipsis() {
+        let mut canvas = canvas(6, 1);
+
+        canvas.text_cut(Point::new(0, 0), "abcdef", 4, Role::Label);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "abc⋯  ");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "abc~  ");
+    }
+
+    #[test]
+    fn text_cut_puts_the_ellipsis_after_a_wide_character_that_fits() {
+        let mut canvas = canvas(5, 1);
+
+        canvas.text_cut(Point::new(0, 0), "a漢字", 4, Role::Label);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "a漢⋯ ");
+    }
+
+    #[test]
+    fn text_cut_to_no_width_draws_nothing() {
+        let mut canvas = canvas(2, 1);
+
+        canvas.text_cut(Point::new(0, 0), "ab", 0, Role::Label);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "  ");
+    }
+
+    #[test]
+    fn a_path_turns_a_corner_at_each_inner_point() {
+        let mut canvas = canvas(4, 3);
+        let points = [Point::new(0, 0), Point::new(3, 0), Point::new(3, 2), Point::new(1, 2)];
+
+        canvas.path(&points, LineKind::Light, Role::Edge).unwrap();
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "───┐\n   │\n ──┘");
+    }
+
+    #[test]
+    fn a_path_with_a_diagonal_step_draws_nothing() {
+        let mut canvas = canvas(3, 3);
+        let points = [Point::new(0, 0), Point::new(2, 0), Point::new(0, 2)];
+
+        let result = canvas.path(&points, LineKind::Light, Role::Edge);
+
+        assert_eq!(result, Err(Error::Diagonal { from: points[1], to: points[2] }));
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "   \n   \n   ");
     }
 
     #[test]
