@@ -11,6 +11,10 @@ publish = false
 [lib]
 name = "vt_canvas"
 
+[[bench]]
+name = "canvas"
+harness = false
+
 [lints.rust]
 unsafe_code = "forbid"
 elided_lifetimes_in_paths = "warn"
@@ -96,7 +100,8 @@ unreadable_literal = "allow"
 [dependencies]
 unicode-width = "0.2.3"
 
-# proptest draws random canvases to check the invariants every drawing keeps.
+# proptest draws random canvases to check the invariants every drawing keeps; divan runs the benchmarks.
 [dev-dependencies]
+divan = "0.1.21"
 insta = "1.49.0"
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }

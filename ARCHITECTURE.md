@@ -44,6 +44,7 @@ Sub-cell pixels and layers come with the charts.
   `text_cut` cuts text to a width and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
 - Roles: `Plain`, `Node`, `Edge`, `Label`, `Group`; the caller maps each one to a colour.
 - Output: `rows` yields each row as runs of text sharing a role, without `\n`.
+- Cost at the cell limit, measured on an Apple M5 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 5 ms and reads back in 15 ms, in about 9 MB.
 
 ## Shapes
 
@@ -91,3 +92,8 @@ vt-canvas ← vt-graph ← vt-mermaid
 
 vt-canvas is the bottom: it depends on `unicode-width` only, called directly from `text`.
 mrk measures text with its own helper over the same crate; vt-canvas exposes `width` so its callers measure the way it draws.
+
+## Fuzzing and properties
+
+- `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames and arrows, then checks that every row is exactly the canvas's width.
+- The proptest properties in `canvas` keep the same check in `cargo test`, plus a line drawn from either end, a line drawn twice, and a path drawn as its lines.
