@@ -1,6 +1,6 @@
 use crate::geometry::Direction;
 use crate::line::{LineKind, Sides};
-use crate::shape::Mark;
+use crate::shape::{Mark, Marker};
 
 /// The characters lines, frames and arrows are drawn with; text is written as given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -20,7 +20,9 @@ impl GlyphSet {
         }
     }
 
-    /// Brackets and points are ASCII in both sets; the slants and the cross differ.
+    /// Brackets and points are ASCII in both sets; the slants, the cross and the markers differ.
+    ///
+    /// The markers avoid `●` and `◇`, which are East Asian ambiguous.
     pub(crate) fn mark(self, mark: Mark) -> char {
         match (self, mark) {
             (Self::Unicode, Mark::Rising) => '╱',
@@ -33,6 +35,12 @@ impl GlyphSet {
             (_, Mark::RightPoint) => '>',
             (Self::Unicode, Mark::Cross) => '╳',
             (Self::Ascii, Mark::Cross) => 'x',
+            (Self::Unicode, Mark::Marker(Marker::Dot)) => '⬤',
+            (Self::Unicode, Mark::Marker(Marker::RingedDot)) => '◉',
+            (Self::Unicode, Mark::Marker(Marker::Diamond)) => '⬥',
+            (Self::Ascii, Mark::Marker(Marker::Dot)) => '*',
+            (Self::Ascii, Mark::Marker(Marker::RingedDot)) => '@',
+            (Self::Ascii, Mark::Marker(Marker::Diamond)) => '?',
         }
     }
 
@@ -212,6 +220,8 @@ mod tests {
         let lines = all_sides.flat_map(|sides| [false, true].map(|rounded| GlyphSet::Unicode.line(sides, rounded)));
         let arrows = Direction::ALL.map(|direction| GlyphSet::Unicode.arrow(direction));
         let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint, Mark::Cross]
+            .into_iter()
+            .chain(Marker::ALL.map(Mark::Marker))
             .map(|mark| GlyphSet::Unicode.mark(mark));
         lines.chain(arrows).chain(marks).chain([GlyphSet::Unicode.ellipsis()]).filter(|glyph| *glyph != ' ').collect()
     }

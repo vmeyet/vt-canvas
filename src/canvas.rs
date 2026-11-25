@@ -3,7 +3,7 @@ use std::fmt;
 use crate::geometry::{Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
-use crate::shape::{Mark, Shape};
+use crate::shape::{Mark, Marker, Shape};
 use crate::text;
 
 /// Widest canvas [`Canvas::new`] accepts, in columns.
@@ -231,6 +231,13 @@ impl Canvas {
     /// Like a shape's mark, a line drawn onto it later leaves it whole.
     pub fn cross(&mut self, at: Point, role: Role) {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Cross, role });
+    }
+
+    /// Draws `marker` on one cell: a node too small for an outline.
+    ///
+    /// Like a shape's mark, a line drawn onto it later leaves it whole, so an edge starting on it keeps it.
+    pub fn marker(&mut self, at: Point, marker: Marker, role: Role) {
+        self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Marker(marker), role });
     }
 
     /// Each row as runs of `(text, role)`, every row exactly as wide as the canvas and without `\n`.
@@ -506,6 +513,19 @@ mod tests {
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "───╳");
         assert_eq!(render(&canvas, GlyphSet::Ascii), "---x");
+    }
+
+    #[test]
+    fn a_marker_fills_its_cell_and_stays_whole_under_a_line_leaving_it() {
+        let mut canvas = canvas(3, 3);
+        canvas.marker(Point::new(0, 0), Marker::Dot, Role::Node);
+        canvas.marker(Point::new(2, 0), Marker::RingedDot, Role::Node);
+        canvas.marker(Point::new(1, 2), Marker::Diamond, Role::Node);
+
+        line(&mut canvas, (0, 0), (0, 2), LineKind::Light);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "⬤ ◉\n│  \n│⬥ ");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "* @\n|  \n|? ");
     }
 
     #[test]

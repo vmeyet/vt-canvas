@@ -65,6 +65,24 @@ pub(crate) enum Mark {
     RightPoint,
     /// `╳`, `x` in ASCII: a crossed end, drawn alone by [`Canvas::cross`](crate::Canvas::cross).
     Cross,
+    /// A one-cell figure, drawn alone by [`Canvas::marker`](crate::Canvas::marker).
+    Marker(Marker),
+}
+
+/// A figure that fills one cell: a node too small for an outline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Marker {
+    /// `⬤`, `*` in ASCII.
+    Dot,
+    /// `◉`, `@` in ASCII: a dot inside a ring.
+    RingedDot,
+    /// `⬥`, `?` in ASCII.
+    Diamond,
+}
+
+impl Marker {
+    /// Every marker, in the order the documentation lists them.
+    pub const ALL: [Self; 3] = [Self::Dot, Self::RingedDot, Self::Diamond];
 }
 
 /// A mark and the cell it goes on.
@@ -184,6 +202,7 @@ impl Mark {
             Self::LeftPoint => Self::RightPoint,
             Self::RightPoint => Self::LeftPoint,
             Self::Cross => Self::Cross,
+            Self::Marker(marker) => Self::Marker(marker),
         }
     }
 }

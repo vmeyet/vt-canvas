@@ -27,7 +27,7 @@ Sub-cell pixels and layers come with the charts.
 | `canvas` | `Canvas`, its cells, `Frame`, `Role`, `Run`, `Error` and the size limits |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
 | `glyph` | `GlyphSet`: the character for a cell's sides, an arrow or a shape's mark, junction tables included |
-| `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines |
+| `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines; `Marker`, a node on one cell |
 | `text` | Which characters a cell can hold and how wide they are |
 | `geometry` | `Point`, `Rect`, `Direction` |
 
@@ -78,6 +78,7 @@ A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still
 Slants are `/ \`; brackets and points are the same in both sets.
 Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.
 `Canvas::cross` draws `╳`, `x` in ASCII, and keeps it under a line as a shape's mark is kept.
+`Canvas::marker` draws a node too small for an outline on one cell, kept under a line the same way: `Marker::Dot` `⬤`, `Marker::RingedDot` `◉` and `Marker::Diamond` `⬥`, `*`, `@` and `?` in ASCII; `●` and `◇` would be East Asian ambiguous.
 
 ## Glyph width
 
