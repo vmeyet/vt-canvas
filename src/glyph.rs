@@ -7,7 +7,7 @@ pub enum GlyphSet {
     /// Box drawing (`─ ┼ ╭ ┿ ╬`) and the small triangles `▴ ▸ ▾ ◂`, which are never East Asian ambiguous.
     #[default]
     Unicode,
-    /// `- | + = . : ^ > v <`, for terminals and files that only take ASCII.
+    /// `- | + = . : ' ^ > v <`, for terminals and files that only take ASCII.
     Ascii,
 }
 
@@ -15,7 +15,7 @@ impl GlyphSet {
     pub(crate) fn line(self, sides: Sides, rounded: bool) -> char {
         match self {
             Self::Unicode => unicode_line(sides, rounded),
-            Self::Ascii => ascii_line(sides),
+            Self::Ascii => ascii_line(sides, rounded),
         }
     }
 
@@ -45,14 +45,18 @@ fn unicode_line(sides: Sides, rounded: bool) -> char {
     if let Some(dash) = dash(sides) {
         return dash;
     }
-    let sides = straighten(sides.map(|_, kind| if kind == LineKind::Dashed { LineKind::Light } else { kind }));
+    let sides = straighten(undashed(sides));
     if rounded && let Some(arc) = arc(sides) {
         return arc;
     }
     if sides.any(LineKind::Double) { SINGLE_DOUBLE[index(double_per_axis(sides))] } else { LIGHT_HEAVY[index(sides)] }
 }
 
-fn ascii_line(sides: Sides) -> char {
+/// A rounded corner is `.` at the top and `'` at the bottom, so a rounded box differs from a square one.
+fn ascii_line(sides: Sides, rounded: bool) -> char {
+    if rounded && let Some(arc) = arc(undashed(sides)) {
+        return if matches!(arc, '╭' | '╮') { '.' } else { '\'' };
+    }
     match (sides.has_horizontal(), sides.has_vertical()) {
         (false, false) => ' ',
         (true, true) => '+',
@@ -62,6 +66,10 @@ fn ascii_line(sides: Sides) -> char {
         (false, true) if sides.all(LineKind::Dashed) => ':',
         (false, true) => '|',
     }
+}
+
+fn undashed(sides: Sides) -> Sides {
+    sides.map(|_, kind| if kind == LineKind::Dashed { LineKind::Light } else { kind })
 }
 
 /// Unicode has no dashed junction, so only a straight run of dashed sides stays dashed.

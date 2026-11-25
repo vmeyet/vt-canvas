@@ -61,6 +61,7 @@ Tried on the flowchart spike's output: frames are drawn before edges, so a pass 
 Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a join.
 
 The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy or double, `.` when dashed, and a vertical run as `|`, `:` when dashed.
+A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still differs from a square one.
 Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.
 
 ## Glyph width

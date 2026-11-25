@@ -613,7 +613,7 @@ mod tests {
 
         canvas.arrow(Point::new(8, 1), Direction::Right, Role::Edge);
 
-        assert_eq!(render(&canvas, GlyphSet::Ascii), "+--+  |  \n|  +..+.>\n+--+  |  ");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), ".--.  |  \n|  +..+.>\n'--'  |  ");
     }
 
     #[test]
