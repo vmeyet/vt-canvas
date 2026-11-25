@@ -223,6 +223,7 @@ const SINGLE_DOUBLE: [char; 81] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::canvas::Role as Part;
     use unicode_width::UnicodeWidthChar;
 
     const KINDS: [Option<LineKind>; 5] =
@@ -268,7 +269,7 @@ mod tests {
             .chain(Marker::ALL.map(Mark::Marker))
             .chain(Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|heading| Mark::Tip(tip, heading))))
             .map(|mark| GlyphSet::Unicode.mark(mark));
-        let fills = [GlyphSet::Unicode.fill(Role::Plain)];
+        let fills = [GlyphSet::Unicode.fill(Part::Plain)];
         lines
             .chain(arrows)
             .chain(marks)
@@ -319,7 +320,7 @@ mod tests {
 
     #[test]
     fn ascii_fills_each_series_with_a_character_of_its_own() {
-        let fills: String = [Role::Node, Role::Series(0), Role::Series(1), Role::Series(5), Role::Series(6)]
+        let fills: String = [Part::Node, Part::Series(0), Part::Series(1), Part::Series(5), Part::Series(6)]
             .map(|role| GlyphSet::Ascii.fill(role))
             .into_iter()
             .collect();

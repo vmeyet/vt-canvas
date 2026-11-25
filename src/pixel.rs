@@ -228,12 +228,13 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::canvas::Canvas;
+    use crate::canvas::Role as Part;
 
     const ALL_DOTS: [Dots; 5] = [Dots::Braille, Dots::Octant, Dots::Sextant, Dots::Quadrant, Dots::HalfBlock];
     const SETS: [GlyphSet; 4] = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
 
     pub(crate) fn every_glyph() -> Vec<char> {
-        ALL_DOTS.into_iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, Role::Plain, GlyphSet::Unicode))).collect()
+        ALL_DOTS.into_iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, Part::Plain, GlyphSet::Unicode))).collect()
     }
 
     /// A ring and a line through it, so every slope and every dot of a cell is used.
@@ -245,9 +246,9 @@ pub(crate) mod tests {
             Pixel::new(((1.0 + angle.cos()) * width / 2.0).round() as u32, ((1.0 + angle.sin()) * height / 2.0).round() as u32)
         };
         for step in 0..48 {
-            canvas.segment(on_ring(step), on_ring(step + 1), dots, Role::Series(0));
+            canvas.segment(on_ring(step), on_ring(step + 1), dots, Part::Series(0));
         }
-        canvas.segment(Pixel::new(0, height as u32), Pixel::new(width as u32, 0), dots, Role::Series(1));
+        canvas.segment(Pixel::new(0, height as u32), Pixel::new(width as u32, 0), dots, Part::Series(1));
         canvas
     }
 
@@ -290,7 +291,7 @@ pub(crate) mod tests {
     fn every_pattern_of_dots_has_a_glyph_of_its_own() {
         for (dots, patterns) in [(Dots::Braille, 256), (Dots::Octant, 256), (Dots::Sextant, 64), (Dots::Quadrant, 16)] {
             let glyphs: std::collections::BTreeSet<char> =
-                (0..patterns).map(|lit| dots.glyph(lit as u8, Role::Plain, GlyphSet::Unicode)).collect();
+                (0..patterns).map(|lit| dots.glyph(lit as u8, Part::Plain, GlyphSet::Unicode)).collect();
 
             assert_eq!(glyphs.len(), patterns, "{dots:?}");
         }
@@ -316,14 +317,14 @@ pub(crate) mod tests {
         let top_left_and_bottom_right = 0b1000_0001;
 
         let drawn = [GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii]
-            .map(|glyphs| Dots::Octant.glyph(top_left_and_bottom_right, Role::Plain, glyphs));
+            .map(|glyphs| Dots::Octant.glyph(top_left_and_bottom_right, Part::Plain, glyphs));
 
         assert_eq!(drawn, ['\u{1FB1F}', '▚', ':']);
     }
 
     #[test]
     fn ascii_draws_every_other_series_with_dots_of_its_own() {
-        let drawn = |series| [0b0001, 0b1000, 0b1001].map(|dots| Dots::Quadrant.glyph(dots, Role::Series(series), GlyphSet::Ascii));
+        let drawn = |series| [0b0001, 0b1000, 0b1001].map(|dots| Dots::Quadrant.glyph(dots, Part::Series(series), GlyphSet::Ascii));
 
         assert_eq!([drawn(0), drawn(1), drawn(2)], [['\'', '.', ':'], ['"', ',', ';'], ['\'', '.', ':']]);
     }

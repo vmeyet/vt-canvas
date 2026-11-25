@@ -175,6 +175,7 @@ pub(crate) fn span(eighths: Range<u32>, cells: usize, low_side: Direction) -> im
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::canvas::Role as Part;
 
     const SETS: [GlyphSet; 4] = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
 
@@ -207,7 +208,7 @@ pub(crate) mod tests {
             .into_iter()
             .flat_map(|glyphs| Direction::ALL.map(move |from| (glyphs, from)))
             .map(|(glyphs, from)| {
-                let row: String = (1..=EIGHTHS).map(|eighths| Block { from, eighths }.styled(Role::Series(1), None, glyphs).char).collect();
+                let row: String = (1..=EIGHTHS).map(|eighths| Block { from, eighths }.styled(Part::Series(1), None, glyphs).char).collect();
                 format!("{glyphs:?} from {from:?}: {row}")
             })
             .collect();
@@ -263,8 +264,8 @@ pub(crate) mod tests {
     fn ascii_shows_whichever_of_a_block_and_its_background_fills_more() {
         let small = Block { from: Direction::Down, eighths: 3 };
 
-        let styled = small.styled(Role::Series(0), Some(Role::Series(1)), GlyphSet::Ascii);
+        let styled = small.styled(Part::Series(0), Some(Part::Series(1)), GlyphSet::Ascii);
 
-        assert_eq!(styled, Styled { char: '%', role: Role::Series(1), background: Some(Role::Series(0)) });
+        assert_eq!(styled, Styled { char: '%', role: Part::Series(1), background: Some(Part::Series(0)) });
     }
 }

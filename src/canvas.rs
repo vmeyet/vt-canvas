@@ -512,9 +512,10 @@ fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::canvas::Role as Part;
     use crate::wedge::Fill;
 
-    const NODE: Frame<'static> = Frame { kind: LineKind::Light, corner: Corner::Square, title: None, role: Role::Node };
+    const NODE: Frame<'static> = Frame { kind: LineKind::Light, corner: Corner::Square, title: None, role: Part::Node };
 
     /// Also checks the invariant every drawing keeps: each row is exactly as wide as the canvas.
     fn render(canvas: &Canvas, glyphs: GlyphSet) -> String {
@@ -530,7 +531,7 @@ mod tests {
     }
 
     fn line(canvas: &mut Canvas, from: (u16, u16), to: (u16, u16), kind: LineKind) {
-        canvas.line(Point::new(from.0, from.1), Point::new(to.0, to.1), kind, Role::Edge).unwrap();
+        canvas.line(Point::new(from.0, from.1), Point::new(to.0, to.1), kind, Part::Edge).unwrap();
     }
 
     fn tallest_full_width() -> u16 {
@@ -574,7 +575,7 @@ mod tests {
     fn text_is_cut_at_the_right_edge() {
         let mut canvas = canvas(5, 1);
 
-        canvas.text(Point::new(2, 0), "abcdef", Role::Label);
+        canvas.text(Point::new(2, 0), "abcdef", Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "  abc");
     }
@@ -583,9 +584,9 @@ mod tests {
     fn drawing_outside_the_canvas_draws_nothing() {
         let mut canvas = canvas(3, 2);
 
-        canvas.text(Point::new(0, 2), "below", Role::Label);
-        canvas.text(Point::new(3, 0), "right", Role::Label);
-        canvas.arrow(Point::new(u16::MAX, u16::MAX), Direction::Up, Role::Edge);
+        canvas.text(Point::new(0, 2), "below", Part::Label);
+        canvas.text(Point::new(3, 0), "right", Part::Label);
+        canvas.arrow(Point::new(u16::MAX, u16::MAX), Direction::Up, Part::Edge);
         line(&mut canvas, (5, 0), (5, 9), LineKind::Light);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   \n   ");
@@ -605,7 +606,7 @@ mod tests {
     fn a_wide_character_takes_two_cells() {
         let mut canvas = canvas(5, 1);
 
-        canvas.text(Point::new(0, 0), "漢x", Role::Label);
+        canvas.text(Point::new(0, 0), "漢x", Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "漢x  ");
     }
@@ -614,7 +615,7 @@ mod tests {
     fn a_wide_character_without_room_for_both_halves_is_not_drawn() {
         let mut canvas = canvas(3, 1);
 
-        canvas.text(Point::new(1, 0), "a漢", Role::Label);
+        canvas.text(Point::new(1, 0), "a漢", Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), " a ");
     }
@@ -622,9 +623,9 @@ mod tests {
     #[test]
     fn overwriting_the_left_half_of_a_wide_character_blanks_the_right_half() {
         let mut canvas = canvas(4, 1);
-        canvas.text(Point::new(1, 0), "漢", Role::Label);
+        canvas.text(Point::new(1, 0), "漢", Part::Label);
 
-        canvas.text(Point::new(1, 0), "a", Role::Label);
+        canvas.text(Point::new(1, 0), "a", Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), " a  ");
     }
@@ -632,9 +633,9 @@ mod tests {
     #[test]
     fn overwriting_the_right_half_of_a_wide_character_blanks_the_left_half() {
         let mut canvas = canvas(4, 1);
-        canvas.text(Point::new(1, 0), "漢", Role::Label);
+        canvas.text(Point::new(1, 0), "漢", Part::Label);
 
-        canvas.arrow(Point::new(2, 0), Direction::Left, Role::Edge);
+        canvas.arrow(Point::new(2, 0), Direction::Left, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "  ◂ ");
     }
@@ -642,9 +643,9 @@ mod tests {
     #[test]
     fn a_wide_character_over_two_others_blanks_their_outer_halves() {
         let mut canvas = canvas(6, 1);
-        canvas.text(Point::new(0, 0), "漢字", Role::Label);
+        canvas.text(Point::new(0, 0), "漢字", Part::Label);
 
-        canvas.text(Point::new(1, 0), "中", Role::Label);
+        canvas.text(Point::new(1, 0), "中", Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), " 中   ");
     }
@@ -654,7 +655,7 @@ mod tests {
         let mut canvas = canvas(5, 1);
         line(&mut canvas, (0, 0), (4, 0), LineKind::Light);
 
-        canvas.text(Point::new(1, 0), "ab", Role::Label);
+        canvas.text(Point::new(1, 0), "ab", Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "─ab──");
     }
@@ -662,8 +663,8 @@ mod tests {
     #[test]
     fn a_line_replaces_text_and_arrows() {
         let mut canvas = canvas(4, 1);
-        canvas.text(Point::new(0, 0), "ab", Role::Label);
-        canvas.arrow(Point::new(3, 0), Direction::Right, Role::Edge);
+        canvas.text(Point::new(0, 0), "ab", Part::Label);
+        canvas.arrow(Point::new(3, 0), Direction::Right, Part::Edge);
 
         line(&mut canvas, (1, 0), (3, 0), LineKind::Double);
 
@@ -673,7 +674,7 @@ mod tests {
     #[test]
     fn a_cross_ends_a_line_and_stays_whole_under_another() {
         let mut canvas = canvas(4, 1);
-        canvas.cross(Point::new(3, 0), Role::Edge);
+        canvas.cross(Point::new(3, 0), Part::Edge);
 
         line(&mut canvas, (0, 0), (3, 0), LineKind::Light);
 
@@ -694,10 +695,10 @@ mod tests {
         let more = [(4, Direction::Down, Tip::FilledDiamond), (5, Direction::Right, Tip::Ring), (6, Direction::Right, Tip::Fork)];
 
         for (x, heading, tip) in tips.into_iter().chain(more) {
-            canvas.tip(Point::new(x, 1), heading, tip, Role::Edge);
+            canvas.tip(Point::new(x, 1), heading, tip, Part::Edge);
         }
-        canvas.tip(Point::new(7, 0), Direction::Down, Tip::Fork, Role::Edge);
-        canvas.tip(Point::new(7, 2), Direction::Up, Tip::Fork, Role::Edge);
+        canvas.tip(Point::new(7, 0), Direction::Down, Tip::Fork, Part::Edge);
+        canvas.tip(Point::new(7, 2), Direction::Up, Tip::Fork, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "       Ʌ\n>┼◃⬦⬥o<─\n       V");
         assert_eq!(render(&canvas, GlyphSet::Ascii), "       ^\n>+<o#o<-\n       v");
@@ -708,7 +709,7 @@ mod tests {
         let mut canvas = canvas(3, 1);
         line(&mut canvas, (0, 0), (1, 0), LineKind::Light);
 
-        canvas.tip(Point::new(1, 0), Direction::Right, Tip::Bar, Role::Edge);
+        canvas.tip(Point::new(1, 0), Direction::Right, Tip::Bar, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "─┼ ");
     }
@@ -716,9 +717,9 @@ mod tests {
     #[test]
     fn a_marker_fills_its_cell_and_stays_whole_under_a_line_leaving_it() {
         let mut canvas = canvas(3, 3);
-        canvas.marker(Point::new(0, 0), Marker::Dot, Role::Node);
-        canvas.marker(Point::new(2, 0), Marker::RingedDot, Role::Node);
-        canvas.marker(Point::new(1, 2), Marker::Diamond, Role::Node);
+        canvas.marker(Point::new(0, 0), Marker::Dot, Part::Node);
+        canvas.marker(Point::new(2, 0), Marker::RingedDot, Part::Node);
+        canvas.marker(Point::new(1, 2), Marker::Diamond, Part::Node);
 
         line(&mut canvas, (0, 0), (0, 2), LineKind::Light);
 
@@ -729,7 +730,7 @@ mod tests {
     #[test]
     fn a_line_with_both_ends_on_one_cell_draws_nothing() {
         let mut canvas = canvas(1, 1);
-        canvas.text(Point::new(0, 0), "a", Role::Label);
+        canvas.text(Point::new(0, 0), "a", Part::Label);
 
         line(&mut canvas, (0, 0), (0, 0), LineKind::Light);
 
@@ -740,7 +741,7 @@ mod tests {
     fn text_cut_keeps_text_that_fits() {
         let mut canvas = canvas(6, 1);
 
-        canvas.text_cut(Point::new(0, 0), "abcd", 4, Role::Label);
+        canvas.text_cut(Point::new(0, 0), "abcd", 4, Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "abcd  ");
     }
@@ -749,7 +750,7 @@ mod tests {
     fn text_cut_ends_cut_text_on_an_ellipsis() {
         let mut canvas = canvas(6, 1);
 
-        canvas.text_cut(Point::new(0, 0), "abcdef", 4, Role::Label);
+        canvas.text_cut(Point::new(0, 0), "abcdef", 4, Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "abc⋯  ");
         assert_eq!(render(&canvas, GlyphSet::Ascii), "abc~  ");
@@ -759,7 +760,7 @@ mod tests {
     fn text_cut_puts_the_ellipsis_after_a_wide_character_that_fits() {
         let mut canvas = canvas(5, 1);
 
-        canvas.text_cut(Point::new(0, 0), "a漢字", 4, Role::Label);
+        canvas.text_cut(Point::new(0, 0), "a漢字", 4, Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "a漢⋯ ");
     }
@@ -768,7 +769,7 @@ mod tests {
     fn text_cut_to_no_width_draws_nothing() {
         let mut canvas = canvas(2, 1);
 
-        canvas.text_cut(Point::new(0, 0), "ab", 0, Role::Label);
+        canvas.text_cut(Point::new(0, 0), "ab", 0, Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "  ");
     }
@@ -777,7 +778,7 @@ mod tests {
     fn text_cut_wider_than_the_canvas_leaves_out_a_wide_character_on_the_last_column() {
         let mut canvas = canvas(3, 1);
 
-        canvas.text_cut(Point::new(2, 0), "漢", 5, Role::Label);
+        canvas.text_cut(Point::new(2, 0), "漢", 5, Part::Label);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   ");
     }
@@ -787,7 +788,7 @@ mod tests {
         let mut canvas = canvas(4, 3);
         let points = [Point::new(0, 0), Point::new(3, 0), Point::new(3, 2), Point::new(1, 2)];
 
-        canvas.path(&points, LineKind::Light, Role::Edge).unwrap();
+        canvas.path(&points, LineKind::Light, Part::Edge).unwrap();
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "───┐\n   │\n ──┘");
     }
@@ -797,7 +798,7 @@ mod tests {
         let mut canvas = canvas(3, 3);
         let points = [Point::new(0, 0), Point::new(2, 0), Point::new(0, 2)];
 
-        let result = canvas.path(&points, LineKind::Light, Role::Edge);
+        let result = canvas.path(&points, LineKind::Light, Part::Edge);
 
         assert_eq!(result, Err(Error::Diagonal { from: points[1], to: points[2] }));
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   \n   \n   ");
@@ -808,7 +809,7 @@ mod tests {
         let mut canvas = canvas(3, 3);
         let (from, to) = (Point::new(0, 0), Point::new(2, 2));
 
-        assert_eq!(canvas.line(from, to, LineKind::Light, Role::Edge), Err(Error::Diagonal { from, to }));
+        assert_eq!(canvas.line(from, to, LineKind::Light, Part::Edge), Err(Error::Diagonal { from, to }));
     }
 
     #[test]
@@ -892,7 +893,7 @@ mod tests {
         line(&mut canvas, (3, 1), (8, 1), LineKind::Dashed);
         line(&mut canvas, (6, 0), (6, 2), LineKind::Heavy);
 
-        canvas.arrow(Point::new(8, 1), Direction::Right, Role::Edge);
+        canvas.arrow(Point::new(8, 1), Direction::Right, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Ascii), ".--.  |  \n|  +..+.>\n'--'  |  ");
     }
@@ -900,13 +901,13 @@ mod tests {
     #[test]
     fn rows_group_cells_by_role_without_newlines() {
         let mut canvas = canvas(6, 1);
-        canvas.text(Point::new(1, 0), "ab", Role::Label);
+        canvas.text(Point::new(1, 0), "ab", Part::Label);
         line(&mut canvas, (3, 0), (4, 0), LineKind::Light);
 
         let runs: Vec<Run> = canvas.rows(GlyphSet::Unicode).flatten().collect();
 
         let run = |text: &str, role| Run { text: text.to_owned(), role, background: None };
-        assert_eq!(runs, [run(" ", Role::Plain), run("ab", Role::Label), run("──", Role::Edge), run(" ", Role::Plain)]);
+        assert_eq!(runs, [run(" ", Part::Plain), run("ab", Part::Label), run("──", Part::Edge), run(" ", Part::Plain)]);
     }
 
     /// Each run as its text, its role and its background, so a test sees which role a cell kept.
@@ -921,9 +922,9 @@ mod tests {
     fn a_column_stands_on_the_bottom_of_a_row_in_eighths() {
         let mut canvas = canvas(3, 3);
 
-        canvas.column(0, 4..24, Role::Series(0));
-        canvas.column(1, 21..24, Role::Series(0));
-        canvas.column(2, 0..3, Role::Series(0));
+        canvas.column(0, 4..24, Part::Series(0));
+        canvas.column(1, 21..24, Part::Series(0));
+        canvas.column(2, 0..3, Part::Series(0));
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "▄ 🮃\n█  \n█▃ ");
         assert_eq!(render(&canvas, GlyphSet::Ascii), "# \"\n#  \n#_ ");
@@ -933,8 +934,8 @@ mod tests {
     fn a_row_starts_at_the_left_in_eighths() {
         let mut canvas = canvas(3, 2);
 
-        canvas.row(0, 0..19, Role::Series(0));
-        canvas.row(1, 21..80, Role::Series(1));
+        canvas.row(0, 0..19, Part::Series(0));
+        canvas.row(1, 21..80, Part::Series(1));
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "██▍\n  🮈");
         assert_eq!(render(&canvas, GlyphSet::Ascii), "##|\n  |");
@@ -943,11 +944,11 @@ mod tests {
     #[test]
     fn a_drawing_over_a_block_at_least_half_a_cell_keeps_it_as_background() {
         let mut canvas = canvas(3, 1);
-        canvas.column(0, 0..8, Role::Series(0));
-        canvas.column(1, 4..8, Role::Series(0));
-        canvas.column(2, 5..8, Role::Series(0));
+        canvas.column(0, 0..8, Part::Series(0));
+        canvas.column(1, 4..8, Part::Series(0));
+        canvas.column(2, 5..8, Part::Series(0));
 
-        canvas.text(Point::new(0, 0), "abc", Role::Label);
+        canvas.text(Point::new(0, 0), "abc", Part::Label);
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[ab Label on Some(Series(0))][c Label on None]"]);
     }
@@ -955,7 +956,7 @@ mod tests {
     #[test]
     fn a_line_over_a_block_keeps_it_as_background() {
         let mut canvas = canvas(3, 1);
-        canvas.column(1, 0..8, Role::Series(2));
+        canvas.column(1, 0..8, Part::Series(2));
 
         line(&mut canvas, (0, 0), (2, 0), LineKind::Light);
 
@@ -965,10 +966,10 @@ mod tests {
     #[test]
     fn a_stroke_over_a_bar_is_drawn_on_the_bar() {
         let mut canvas = canvas(3, 2);
-        canvas.column(1, 3..16, Role::Series(0));
+        canvas.column(1, 3..16, Part::Series(0));
 
         for x in 0..3 {
-            canvas.stroke(x, 5, Role::Series(1));
+            canvas.stroke(x, 5, Part::Series(1));
         }
 
         assert_eq!(
@@ -986,8 +987,8 @@ mod tests {
     fn a_stroke_below_the_canvas_draws_nothing() {
         let mut canvas = canvas(1, 1);
 
-        canvas.stroke(0, 8, Role::Series(0));
-        canvas.stroke(0, u32::MAX, Role::Series(0));
+        canvas.stroke(0, 8, Part::Series(0));
+        canvas.stroke(0, u32::MAX, Part::Series(0));
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), " ");
     }
@@ -996,11 +997,11 @@ mod tests {
     fn a_wedge_over_a_wedge_at_least_half_a_cell_keeps_it_as_background() {
         let mut canvas = canvas(2, 1);
         let rising = |fill| Wedge { left: 1, right: 2, fill };
-        canvas.wedge(Point::new(0, 0), rising(Fill::Below), Role::Series(0));
-        canvas.wedge(Point::new(1, 0), Wedge { left: 0, right: 1, fill: Fill::Below }, Role::Series(0));
+        canvas.wedge(Point::new(0, 0), rising(Fill::Below), Part::Series(0));
+        canvas.wedge(Point::new(1, 0), Wedge { left: 0, right: 1, fill: Fill::Below }, Part::Series(0));
 
-        canvas.wedge(Point::new(0, 0), rising(Fill::Above), Role::Series(1));
-        canvas.wedge(Point::new(1, 0), rising(Fill::Above), Role::Series(1));
+        canvas.wedge(Point::new(0, 0), rising(Fill::Above), Part::Series(1));
+        canvas.wedge(Point::new(1, 0), rising(Fill::Above), Part::Series(1));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[🭜 Series(1) on Some(Series(0))][🭜 Series(1) on None]"]);
         assert_eq!(render(&canvas, GlyphSet::Ascii), "//");
@@ -1009,9 +1010,9 @@ mod tests {
     #[test]
     fn a_wedge_filling_nothing_leaves_the_cell_as_it_was() {
         let mut canvas = canvas(1, 1);
-        canvas.text(Point::new(0, 0), "a", Role::Label);
+        canvas.text(Point::new(0, 0), "a", Part::Label);
 
-        canvas.wedge(Point::new(0, 0), Wedge { left: 0, right: 0, fill: Fill::Below }, Role::Series(0));
+        canvas.wedge(Point::new(0, 0), Wedge { left: 0, right: 0, fill: Fill::Below }, Part::Series(0));
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "a");
     }
@@ -1020,9 +1021,9 @@ mod tests {
     fn dots_of_one_kind_share_a_cell_in_the_role_drawn_last() {
         let mut canvas = canvas(2, 1);
 
-        canvas.dot(Pixel::new(0, 0), Dots::Braille, Role::Series(0));
-        canvas.dot(Pixel::new(1, 3), Dots::Braille, Role::Series(1));
-        canvas.dot(Pixel::new(2, 1), Dots::Braille, Role::Series(0));
+        canvas.dot(Pixel::new(0, 0), Dots::Braille, Part::Series(0));
+        canvas.dot(Pixel::new(1, 3), Dots::Braille, Part::Series(1));
+        canvas.dot(Pixel::new(2, 1), Dots::Braille, Part::Series(0));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[⢁ Series(1) on None][⠂ Series(0) on None]"]);
     }
@@ -1030,9 +1031,9 @@ mod tests {
     #[test]
     fn dots_of_another_kind_replace_the_cell() {
         let mut canvas = canvas(1, 1);
-        canvas.dot(Pixel::new(0, 0), Dots::Braille, Role::Series(0));
+        canvas.dot(Pixel::new(0, 0), Dots::Braille, Part::Series(0));
 
-        canvas.dot(Pixel::new(1, 1), Dots::Quadrant, Role::Series(1));
+        canvas.dot(Pixel::new(1, 1), Dots::Quadrant, Part::Series(1));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▗ Series(1) on None]"]);
     }
@@ -1041,11 +1042,11 @@ mod tests {
     fn the_two_halves_of_a_cell_each_keep_their_role() {
         let mut canvas = canvas(3, 1);
 
-        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Role::Series(0));
-        canvas.dot(Pixel::new(0, 1), Dots::HalfBlock, Role::Series(1));
-        canvas.dot(Pixel::new(1, 0), Dots::HalfBlock, Role::Series(2));
-        canvas.dot(Pixel::new(1, 1), Dots::HalfBlock, Role::Series(2));
-        canvas.dot(Pixel::new(2, 1), Dots::HalfBlock, Role::Series(3));
+        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Part::Series(0));
+        canvas.dot(Pixel::new(0, 1), Dots::HalfBlock, Part::Series(1));
+        canvas.dot(Pixel::new(1, 0), Dots::HalfBlock, Part::Series(2));
+        canvas.dot(Pixel::new(1, 1), Dots::HalfBlock, Part::Series(2));
+        canvas.dot(Pixel::new(2, 1), Dots::HalfBlock, Part::Series(3));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▀ Series(0) on Some(Series(1))][█ Series(2) on None][▄ Series(3) on None]"]);
         assert_eq!(render(&canvas, GlyphSet::Ascii), "#*.");
@@ -1054,11 +1055,11 @@ mod tests {
     #[test]
     fn dots_over_a_bar_are_drawn_on_the_bar() {
         let mut canvas = canvas(2, 1);
-        canvas.row(0, 0..16, Role::Series(0));
+        canvas.row(0, 0..16, Part::Series(0));
 
-        canvas.segment(Pixel::new(0, 1), Pixel::new(3, 1), Dots::Braille, Role::Series(1));
-        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Role::Series(2));
-        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Role::Series(2));
+        canvas.segment(Pixel::new(0, 1), Pixel::new(3, 1), Dots::Braille, Part::Series(1));
+        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Part::Series(2));
+        canvas.dot(Pixel::new(0, 0), Dots::HalfBlock, Part::Series(2));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▀ Series(2) on Some(Series(0))][⠒ Series(1) on Some(Series(0))]"]);
     }
@@ -1067,9 +1068,9 @@ mod tests {
     fn a_segment_leaving_the_canvas_is_clipped() {
         let mut canvas = canvas(2, 1);
 
-        canvas.segment(Pixel::new(0, 0), Pixel::new(u32::MAX, 1), Dots::Quadrant, Role::Series(0));
-        canvas.dot(Pixel::new(4, 0), Dots::Quadrant, Role::Series(0));
-        canvas.dot(Pixel::new(0, 2), Dots::Quadrant, Role::Series(0));
+        canvas.segment(Pixel::new(0, 0), Pixel::new(u32::MAX, 1), Dots::Quadrant, Part::Series(0));
+        canvas.dot(Pixel::new(4, 0), Dots::Quadrant, Part::Series(0));
+        canvas.dot(Pixel::new(0, 2), Dots::Quadrant, Part::Series(0));
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "▀▀");
     }
@@ -1077,9 +1078,9 @@ mod tests {
     #[test]
     fn a_block_over_a_block_keeps_the_first_as_background() {
         let mut canvas = canvas(1, 2);
-        canvas.column(0, 0..16, Role::Series(1));
+        canvas.column(0, 0..16, Part::Series(1));
 
-        canvas.column(0, 11..16, Role::Series(0));
+        canvas.column(0, 11..16, Part::Series(0));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[█ Series(1) on None]", "[▅ Series(0) on Some(Series(1))]"]);
     }
@@ -1087,11 +1088,11 @@ mod tests {
     #[test]
     fn a_small_block_stays_behind_a_block_that_leaves_it_most_of_the_rest() {
         let mut canvas = canvas(2, 1);
-        canvas.column(0, 0..2, Role::Series(1));
-        canvas.column(1, 0..1, Role::Series(1));
+        canvas.column(0, 0..2, Part::Series(1));
+        canvas.column(1, 0..1, Part::Series(1));
 
-        canvas.column(0, 3..8, Role::Series(0));
-        canvas.column(1, 3..8, Role::Series(0));
+        canvas.column(0, 3..8, Part::Series(0));
+        canvas.column(1, 3..8, Part::Series(0));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▅ Series(0) on Some(Series(1))][▅ Series(0) on None]"]);
     }
@@ -1099,10 +1100,10 @@ mod tests {
     #[test]
     fn a_background_stays_under_every_drawing_that_follows() {
         let mut canvas = canvas(1, 1);
-        canvas.column(0, 0..8, Role::Series(1));
-        canvas.column(0, 6..8, Role::Series(0));
+        canvas.column(0, 0..8, Part::Series(1));
+        canvas.column(0, 6..8, Part::Series(0));
 
-        canvas.text(Point::new(0, 0), "a", Role::Label);
+        canvas.text(Point::new(0, 0), "a", Part::Label);
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[a Label on Some(Series(1))]"]);
     }
@@ -1110,9 +1111,9 @@ mod tests {
     #[test]
     fn a_whole_block_leaves_no_background() {
         let mut canvas = canvas(1, 1);
-        canvas.column(0, 0..8, Role::Series(1));
+        canvas.column(0, 0..8, Part::Series(1));
 
-        canvas.column(0, 0..8, Role::Series(0));
+        canvas.column(0, 0..8, Part::Series(0));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[█ Series(0) on None]"]);
     }
@@ -1120,10 +1121,10 @@ mod tests {
     #[test]
     fn cells_with_different_backgrounds_are_different_runs() {
         let mut canvas = canvas(4, 1);
-        canvas.row(0, 8..16, Role::Series(0));
-        canvas.row(0, 16..24, Role::Series(1));
+        canvas.row(0, 8..16, Part::Series(0));
+        canvas.row(0, 16..24, Part::Series(1));
 
-        canvas.text(Point::new(0, 0), "abcd", Role::Label);
+        canvas.text(Point::new(0, 0), "abcd", Part::Label);
 
         assert_eq!(
             styles(&canvas, GlyphSet::Unicode),
@@ -1216,19 +1217,19 @@ mod tests {
             ) {
                 let mut canvas = canvas(width, height);
                 for (fine, series) in fines.iter().take(4).cloned() {
-                    draw(&mut canvas, fine, Role::Series(series));
+                    draw(&mut canvas, fine, Part::Series(series));
                 }
                 for ((from, to), kind) in lines {
-                    canvas.line(from, to, kind, Role::Edge).unwrap();
+                    canvas.line(from, to, kind, Part::Edge).unwrap();
                 }
                 for (corner, size, title) in &frames {
                     canvas.frame(Rect::new(corner.x, corner.y, size.x, size.y), Frame { title: Some(title), ..NODE });
                 }
                 for (at, text, max_width) in &texts {
-                    canvas.text_cut(*at, text, *max_width, Role::Label);
+                    canvas.text_cut(*at, text, *max_width, Part::Label);
                 }
                 for (fine, series) in fines.into_iter().skip(4) {
-                    draw(&mut canvas, fine, Role::Series(series));
+                    draw(&mut canvas, fine, Part::Series(series));
                 }
 
                 for row in canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect::<String>()) {
@@ -1240,15 +1241,15 @@ mod tests {
             #[test]
             fn a_whole_block_covers_whatever_was_drawn(fines in prop::collection::vec(finer_than_a_cell(), 0..8), text in "[a漢 ]{0,8}") {
                 let mut canvas = canvas(8, 2);
-                canvas.text(Point::new(0, 0), &text, Role::Label);
+                canvas.text(Point::new(0, 0), &text, Part::Label);
                 for fine in fines {
-                    draw(&mut canvas, fine, Role::Series(1));
+                    draw(&mut canvas, fine, Part::Series(1));
                 }
 
-                canvas.row(0, 0..64, Role::Series(0));
-                canvas.row(1, 0..64, Role::Series(0));
+                canvas.row(0, 0..64, Part::Series(0));
+                canvas.row(1, 0..64, Part::Series(0));
 
-                let whole = || vec![Run { text: "█".repeat(8), role: Role::Series(0), background: None }];
+                let whole = || vec![Run { text: "█".repeat(8), role: Part::Series(0), background: None }];
                 prop_assert_eq!(canvas.rows(GlyphSet::Unicode).collect::<Vec<_>>(), [whole(), whole()]);
             }
 
@@ -1257,8 +1258,8 @@ mod tests {
                 let mut forward = canvas(16, 16);
                 let mut backward = canvas(16, 16);
 
-                forward.line(from, to, kind, Role::Edge).unwrap();
-                backward.line(to, from, kind, Role::Edge).unwrap();
+                forward.line(from, to, kind, Part::Edge).unwrap();
+                backward.line(to, from, kind, Part::Edge).unwrap();
 
                 prop_assert_eq!(forward, backward);
             }
@@ -1266,11 +1267,11 @@ mod tests {
             #[test]
             fn drawing_a_line_twice_changes_nothing(((from, to), kind) in (straight(), kind()), path in path()) {
                 let mut once = canvas(16, 16);
-                once.path(&path, LineKind::Light, Role::Edge).unwrap();
-                once.line(from, to, kind, Role::Edge).unwrap();
+                once.path(&path, LineKind::Light, Part::Edge).unwrap();
+                once.line(from, to, kind, Part::Edge).unwrap();
                 let mut twice = once.clone();
 
-                twice.line(from, to, kind, Role::Edge).unwrap();
+                twice.line(from, to, kind, Part::Edge).unwrap();
 
                 prop_assert_eq!(once, twice);
             }
@@ -1280,9 +1281,9 @@ mod tests {
                 let mut path = canvas(16, 16);
                 let mut lines = canvas(16, 16);
 
-                path.path(&points, kind, Role::Edge).unwrap();
+                path.path(&points, kind, Part::Edge).unwrap();
                 for pair in points.windows(2) {
-                    lines.line(pair[0], pair[1], kind, Role::Edge).unwrap();
+                    lines.line(pair[0], pair[1], kind, Part::Edge).unwrap();
                 }
 
                 prop_assert_eq!(path, lines);

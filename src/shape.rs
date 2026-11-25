@@ -252,7 +252,8 @@ fn pointed(row: u16, height: u16, [upper, middle, lower]: [Mark; 3]) -> Mark {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Canvas, Direction, GlyphSet, LineKind, Role};
+    use crate::canvas::Role as Part;
+    use crate::{Canvas, Direction, GlyphSet, LineKind};
 
     fn render(canvas: &Canvas, glyphs: GlyphSet) -> String {
         canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect::<String>()).collect::<Vec<_>>().join("\n")
@@ -263,9 +264,9 @@ mod tests {
         let inset = shape.inset();
         let (width, height) = (5 + 2 + 2 * inset.side, label_rows + inset.top + inset.bottom);
         let mut canvas = Canvas::new(width, height).unwrap();
-        canvas.shape(Rect::new(0, 0, width, height), shape, Role::Node);
+        canvas.shape(Rect::new(0, 0, width, height), shape, Part::Node);
         for row in 0..label_rows {
-            canvas.text(Point::new(inset.side + 1, inset.top + row), "Label", Role::Label);
+            canvas.text(Point::new(inset.side + 1, inset.top + row), "Label", Part::Label);
         }
         canvas
     }
@@ -277,14 +278,14 @@ mod tests {
         let (middle_x, middle_y) = (rect.x + rect.width / 2, rect.y + inset.top);
         let (right, bottom) = (rect.x + rect.width - 1, rect.y + rect.height - 1);
         let mut canvas = Canvas::new(rect.width + 6, rect.height + 4).unwrap();
-        canvas.shape(rect, shape, Role::Node);
+        canvas.shape(rect, shape, Part::Node);
         for (from, to) in [
             (Point::new(middle_x, 0), Point::new(middle_x, rect.y)),
             (Point::new(middle_x, bottom + 2), Point::new(middle_x, bottom)),
             (Point::new(0, middle_y), Point::new(rect.x, middle_y)),
             (Point::new(right + 3, middle_y), Point::new(right, middle_y)),
         ] {
-            canvas.line(from, to, LineKind::Light, Role::Edge).unwrap();
+            canvas.line(from, to, LineKind::Light, Part::Edge).unwrap();
         }
         canvas
     }
@@ -299,7 +300,7 @@ mod tests {
         for shape in Shape::ALL {
             let mut canvas = Canvas::new(2, 2).unwrap();
 
-            canvas.shape(Rect::new(u16::MAX, u16::MAX, 5, 5), shape, Role::Node);
+            canvas.shape(Rect::new(u16::MAX, u16::MAX, 5, 5), shape, Part::Node);
 
             assert_eq!(render(&canvas, GlyphSet::Unicode), "  \n  ", "{shape:?}");
         }
@@ -337,10 +338,10 @@ mod tests {
     #[test]
     fn a_line_ending_on_a_slant_leaves_it_whole() {
         let mut canvas = Canvas::new(8, 3).unwrap();
-        canvas.shape(Rect::new(3, 0, 5, 3), Shape::Hexagon, Role::Node);
+        canvas.shape(Rect::new(3, 0, 5, 3), Shape::Hexagon, Part::Node);
 
-        canvas.line(Point::new(0, 1), Point::new(3, 1), LineKind::Light, Role::Edge).unwrap();
-        canvas.arrow(Point::new(2, 1), Direction::Right, Role::Edge);
+        canvas.line(Point::new(0, 1), Point::new(3, 1), LineKind::Light, Part::Edge).unwrap();
+        canvas.arrow(Point::new(2, 1), Direction::Right, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   ╱───╲\n──▸<   >\n   ╲───╱");
     }
@@ -365,8 +366,8 @@ mod tests {
     fn an_empty_rectangle_draws_nothing() {
         let mut canvas = Canvas::new(2, 2).unwrap();
 
-        canvas.shape(Rect::new(0, 0, 0, 2), Shape::Hexagon, Role::Node);
-        canvas.shape(Rect::new(0, 0, 2, 0), Shape::DoubleCircle, Role::Node);
+        canvas.shape(Rect::new(0, 0, 0, 2), Shape::Hexagon, Part::Node);
+        canvas.shape(Rect::new(0, 0, 2, 0), Shape::DoubleCircle, Part::Node);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "  \n  ");
     }
@@ -375,7 +376,7 @@ mod tests {
     fn a_shape_leaving_the_canvas_is_clipped() {
         let mut canvas = Canvas::new(3, 2).unwrap();
 
-        canvas.shape(Rect::new(1, 1, u16::MAX, u16::MAX), Shape::Trapezoid, Role::Node);
+        canvas.shape(Rect::new(1, 1, u16::MAX, u16::MAX), Shape::Trapezoid, Part::Node);
 
         assert_eq!(render(&canvas, GlyphSet::Ascii), "   \n /-");
     }

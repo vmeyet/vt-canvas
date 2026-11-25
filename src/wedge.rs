@@ -114,6 +114,7 @@ impl Wedge {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::canvas::Role as Part;
 
     pub(crate) fn every_glyph() -> Vec<char> {
         [BELOW, ABOVE].concat().concat()
@@ -125,7 +126,7 @@ pub(crate) mod tests {
             .flat_map(|fill| (0..=THIRDS).map(move |left| (fill, left)))
             .map(|(fill, left)| {
                 let row: String =
-                    (0..=THIRDS).map(|right| Wedge { left, right, fill }.styled(Role::Series(0), None, glyphs).char).collect();
+                    (0..=THIRDS).map(|right| Wedge { left, right, fill }.styled(Part::Series(0), None, glyphs).char).collect();
                 format!("{fill:?} from {left}: {row}|")
             })
             .collect();
@@ -154,6 +155,6 @@ pub(crate) mod tests {
         let wedge = Wedge { left: 200, right: 9, fill: Fill::Below };
 
         assert_eq!(wedge.cover().parts, Cover::WHOLE);
-        assert_eq!(wedge.styled(Role::Plain, None, GlyphSet::Unicode).char, '█');
+        assert_eq!(wedge.styled(Part::Plain, None, GlyphSet::Unicode).char, '█');
     }
 }
