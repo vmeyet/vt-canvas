@@ -120,7 +120,7 @@ The rules, applied in order:
 2. Dashed stays dashed only on a straight run of dashed sides (`╌ ╎`); Unicode has no dashed junction, so anywhere else dashed counts as light.
 3. A side alone continues through its cell: a line end fills the cell (`─`, never the half `╴`).
 4. A rounded corner is an arc (`╭`) only when its two sides are light; a heavy or double corner stays square, and a corner a line joins becomes a junction.
-   The last frame drawn on a corner sets whether it is rounded.
+   The last frame drawn on a corner sets whether it is rounded; a frame one cell wide or tall has no corner.
 5. Light and heavy mix freely: Unicode has every combination (`┽ ┿ ╀ ╆`).
 6. Double mixes with light only axis by axis (`╪ ╫ ╞`): an axis with a double side is all double, and heavy elsewhere becomes light, as Unicode has no heavy and double glyph.
 
@@ -129,7 +129,7 @@ Tried on the flowchart spike's output: frames are drawn before edges, so a pass 
 Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a join.
 
 A junction has one role.
-It keeps the role of a line running through it (entering and leaving by opposite sides) that the new line only ends on, so a node's border stays whole in its colour where an edge joins it (`┤`); otherwise it takes the role of the line drawn last, so an edge crossing a frame stays whole in its colour.
+When the new line only ends on the cell and the cell already has two sides or more, a side or a corner of a border, the junction keeps that border's role, so a node's border stays whole in its colour where an edge joins it (`┤`, `├` on a corner); otherwise it takes the role of the line drawn last, so an edge crossing a frame stays whole in its colour.
 
 ## Glyph sets
 
@@ -150,7 +150,7 @@ A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still
 Slants are `/ \`; brackets and points are the same in both sets.
 `Canvas::symbol` draws a node too small for an outline on one cell, kept under a line the same way: `Symbol::Dot` `⬤`, `Symbol::RingedDot` `◉` and `Symbol::FilledDiamond` `⬥`, `*`, `@` and `?` in ASCII; `●` and `◆` would be East Asian ambiguous.
 `Canvas::tip` draws an edge's end on one cell, facing the node it goes into, kept under a line the same way, so an edge drawn later does not cut it: `Tip::Arrow` `▸ ◂ ▴ ▾`, `Tip::Triangle` `▹ ◃ ▵ ▿`, `Tip::Diamond` `⬦`, `Tip::FilledDiamond` `⬥`, `Tip::Ring` `o`, `Tip::Fork` `< > Ʌ V`, opening onto the node, and `Tip::Cross` `╳`; in ASCII `> < ^ v` for both triangles, `o`, `#` (not `*`, a multiplicity), `o`, `< > ^ v` and `x`.
-`Tip::Bar` is a line across the edge instead, merged with it into `┼` (`+`) in the kind of the line it crosses: `╋` on a heavy line, `╬` on a double one.
+`Tip::Bar` is a line across the edge instead, merged with it into `┼` (`+`) in the kind of the line it crosses: `╋` on a heavy line, `╬` on a double one; on a symbol, a mark or a tip it replaces them, as every tip does.
 `△ ▷ ◇ ◆ ○` would be East Asian ambiguous.
 
 ## Glyph width

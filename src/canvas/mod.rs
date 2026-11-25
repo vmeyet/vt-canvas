@@ -192,6 +192,7 @@ impl<R: Role> Canvas<R> {
     /// Writes `text` like [`text`](Self::text), cut to `max_width` columns, its last column an ellipsis when cut.
     ///
     /// The right edge of the canvas cuts it the same way, so text running off the canvas still ends on an ellipsis.
+    /// Text is not padded: a column left after the ellipsis, when a wide character did not fit, keeps what was there.
     pub fn text_cut(&mut self, at: Point, text: &str, max_width: u16, role: R) {
         let max_width = max_width.min(self.width.saturating_sub(at.x));
         if text::text_width(text) <= usize::from(max_width) {

@@ -65,10 +65,14 @@ impl<R: Role> Canvas<R> {
     ///
     /// A bar merges with the lines through its cell into `┼`, in the kind of the line it crosses; any other tip is
     /// kept under a line, as a shape's mark is, so an edge drawn after it does not cut it.
+    /// Like every drawing, a tip replaces a symbol, a mark or a tip already on its cell.
     pub fn tip(&mut self, at: Point, direction: Direction, tip: Tip, role: R) {
         if tip == Tip::Bar {
-            let kind = self.line_along(at, direction).unwrap_or(LineKind::Light);
-            self.join(at, Sides::every(kind), role);
+            let sides = Sides::every(self.line_along(at, direction).unwrap_or(LineKind::Light));
+            match self.index(at).map(|index| self.cells[index]) {
+                Some(Cell::Line { .. }) => self.join(at, sides, role),
+                _ => self.put(at, Cell::Line { sides, rounded: false, role }),
+            }
         } else {
             self.put(at, Cell::Tip { tip, direction, role });
         }
@@ -79,8 +83,10 @@ impl<R: Role> Canvas<R> {
         for (index, from) in corners.into_iter().enumerate() {
             self.draw_straight(from, corners[(index + 1) % corners.len()], kind, role);
         }
-        for at in corners {
-            self.set_corner(at, corner);
+        if border.width > 1 && border.height > 1 {
+            for at in corners {
+                self.set_corner(at, corner);
+            }
         }
     }
 
@@ -100,13 +106,13 @@ impl<R: Role> Canvas<R> {
 
     /// Merges `sides` into the lines of the cell; a line with both ends on one cell leaves it through no side, so it draws nothing.
     ///
-    /// A junction keeps the role of a line running through it that the new line only ends on, so a node's border
-    /// stays whole where an edge joins it; otherwise it takes the new line's role.
+    /// A junction keeps the role of the border it is on (two sides or more) when the new line only ends on it, so a
+    /// node's border stays whole where an edge joins it; otherwise it takes the new line's role.
     fn join(&mut self, at: Point, sides: Sides, role: R) {
         let Some(index) = self.index(at).filter(|_| sides.count() > 0) else { return };
         match self.cells[index] {
             Cell::Line { sides: below, rounded, role: below_role } => {
-                let role = if below.runs_through() && !sides.runs_through() { below_role } else { role };
+                let role = if below.count() > 1 && !sides.runs_through() { below_role } else { role };
                 self.cells[index] = Cell::Line { sides: below.merge(sides), rounded, role };
             }
             Cell::Mark { .. } | Cell::Tip { .. } | Cell::Symbol { .. } => {}
@@ -404,5 +410,35 @@ mod tests {
         canvas.tip(Point::new(8, 1), Direction::Right, Tip::Arrow, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Ascii), ".--.  |  \n|  +..+.>\n'--'  |  ");
+    }
+
+    #[test]
+    fn an_edge_ending_on_a_corner_leaves_it_in_the_frame_role() {
+        let mut canvas = canvas(4, 3);
+        canvas.frame(Rect::new(1, 0, 3, 3), LineKind::Light, Corner::Rounded, Part::Node);
+
+        line(&mut canvas, (0, 0), (1, 0), LineKind::Light);
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode)[0], "[─ Edge on None][┬─╮ Node on None]");
+    }
+
+    #[test]
+    fn a_frame_one_cell_wide_sets_no_corner() {
+        let mut canvas = canvas(3, 3);
+        canvas.frame(Rect::new(0, 0, 3, 3), LineKind::Light, Corner::Square, Part::Node);
+
+        canvas.frame(Rect::new(0, 0, 1, 1), LineKind::Light, Corner::Rounded, Part::Node);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "┌─┐\n│ │\n└─┘");
+    }
+
+    #[test]
+    fn a_bar_replaces_a_tip_on_its_cell() {
+        let mut canvas = canvas(1, 1);
+        canvas.tip(Point::new(0, 0), Direction::Right, Tip::Arrow, Part::Edge);
+
+        canvas.tip(Point::new(0, 0), Direction::Right, Tip::Bar, Part::Edge);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "┼");
     }
 }

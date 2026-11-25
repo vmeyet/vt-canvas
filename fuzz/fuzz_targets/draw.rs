@@ -9,8 +9,8 @@ use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, GlyphSet, LineKind, Pixel
 
 /// Wide enough to reach every clipping branch, small enough to keep each run fast.
 const MAX_SIDE: u16 = 64;
-/// Coordinates past it are folded back under it, but for the last ones before `u16::MAX`, where sums overflow:
-/// a line to 60000 walks 60000 cells, which slows every run without reaching anything new.
+/// Coordinates past it are folded back under it, so most drawings land near the canvas, but for the last ones before
+/// `u16::MAX`, where sums overflow.
 const FAR: u16 = 1024;
 
 #[derive(Debug, Arbitrary)]

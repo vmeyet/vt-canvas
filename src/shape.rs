@@ -39,6 +39,7 @@ pub enum Shape {
 }
 
 /// What an outline takes from the edges of its rectangle; what is left is free for its content.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Inset {
     /// Columns on the left, and as many on the right.
