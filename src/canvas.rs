@@ -548,7 +548,7 @@ mod tests {
         canvas.tip(Point::new(7, 2), Direction::Up, Tip::Fork, Role::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "       Ʌ\n>┼◃⬦⬥o<─\n       V");
-        assert_eq!(render(&canvas, GlyphSet::Ascii), "       ^\n>+<o*o<-\n       v");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "       ^\n>+<o#o<-\n       v");
     }
 
     #[test]

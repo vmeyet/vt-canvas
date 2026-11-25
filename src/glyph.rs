@@ -57,7 +57,7 @@ impl GlyphSet {
             (Self::Unicode, Tip::Diamond, _) => '⬦',
             (Self::Unicode, Tip::FilledDiamond, _) => '⬥',
             (Self::Ascii, Tip::Diamond, _) | (_, Tip::Ring, _) => 'o',
-            (Self::Ascii, Tip::FilledDiamond, _) => '*',
+            (Self::Ascii, Tip::FilledDiamond, _) => '#',
             (Self::Unicode, Tip::Bar, _) => '┼',
             (Self::Ascii, Tip::Bar, _) => '+',
             (_, Tip::Fork, Direction::Right) => '<',

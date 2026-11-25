@@ -9,7 +9,7 @@ pub enum Tip {
     Hollow,
     /// `⬦`, `o` in ASCII: as aggregation draws.
     Diamond,
-    /// `⬥`, `*` in ASCII: as composition draws.
+    /// `⬥`, `#` in ASCII, so it is not read as the multiplicity `*`: as composition draws.
     FilledDiamond,
     /// `o`: a lollipop's ring, or a crow's foot's zero.
     Ring,
