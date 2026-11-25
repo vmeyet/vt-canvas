@@ -28,7 +28,7 @@ pub struct Run<R> {
     pub background: Option<R>,
 }
 
-/// The corners of a [`Frame`].
+/// The corners [`Canvas::frame`] draws.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Corner {
     /// `┌ ┐ └ ┘`
@@ -36,19 +36,6 @@ pub enum Corner {
     Square,
     /// `╭ ╮ ╰ ╯`, square when the frame is not light or dashed, as Unicode has no other arc.
     Rounded,
-}
-
-/// How [`Canvas::frame`] draws a rectangle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Frame<'a, R> {
-    /// The kind of its four lines.
-    pub kind: LineKind,
-    /// Its corners.
-    pub corner: Corner,
-    /// Text set in the top border, cut to fit.
-    pub title: Option<&'a str>,
-    /// The role of the border and the title.
-    pub role: R,
 }
 
 /// A drawing the canvas refuses.
@@ -222,8 +209,8 @@ impl<R: Role> Canvas<R> {
         Ok(())
     }
 
-    /// Draws the border of `rect`, with its title in the top border after the first corner.
-    pub fn frame(&mut self, rect: Rect, frame: Frame<'_, R>) {
+    /// Draws the border of `rect` in lines of `kind`; a frame without room for a line inside is drawn as lines.
+    pub fn frame(&mut self, rect: Rect, kind: LineKind, corner: Corner, role: R) {
         if rect.width == 0 || rect.height == 0 {
             return;
         }
@@ -232,15 +219,12 @@ impl<R: Role> Canvas<R> {
         let bottom = top.saturating_add(rect.height - 1);
         let corners = [Point::new(left, top), Point::new(right, top), Point::new(right, bottom), Point::new(left, bottom)];
         for (index, from) in corners.into_iter().enumerate() {
-            self.straight(from, corners[(index + 1) % corners.len()], frame.kind, frame.role);
+            self.straight(from, corners[(index + 1) % corners.len()], kind, role);
         }
-        if frame.corner == Corner::Rounded {
+        if corner == Corner::Rounded {
             for corner in corners {
                 self.round(corner);
             }
-        }
-        if let Some(title) = frame.title {
-            self.title(rect, title, frame.role);
         }
     }
 
@@ -251,7 +235,7 @@ impl<R: Role> Canvas<R> {
         if rect.width == 0 || rect.height == 0 {
             return;
         }
-        self.frame(rect, Frame { kind: LineKind::Light, corner: shape.corner(), title: None, role });
+        self.frame(rect, LineKind::Light, shape.corner(), role);
         for [from, to] in shape.inner_lines(rect) {
             self.straight(from, to, LineKind::Light, role);
         }
@@ -353,18 +337,6 @@ impl<R: Role> Canvas<R> {
             let (x, y) = if horizontal { (step, from.y) } else { (from.x, step) };
             self.draw_line(usize::from(x), usize::from(y), segment(step, low, high, kind, before), role);
         }
-    }
-
-    /// The title sits between `┌─ ` and ` ─┐`, cut to fit.
-    fn title(&mut self, rect: Rect, title: &str, role: R) {
-        let (left, y) = (usize::from(rect.x), usize::from(rect.y));
-        let (start, end) = (left + 3, (left + usize::from(rect.width)).saturating_sub(3));
-        if start >= end {
-            return;
-        }
-        let title_end = self.write(start, y, title, role, end);
-        self.put(start - 1, y, Cell::Text { char: ' ', role });
-        self.put(title_end, y, Cell::Text { char: ' ', role });
     }
 
     /// Writes `text` from column `x` up to column `end`, excluded, and returns the column after the last character.
@@ -478,8 +450,6 @@ mod tests {
     use super::*;
     use crate::role::tests::Part;
     use crate::wedge::Fill;
-
-    const NODE: Frame<'static, Part> = Frame { kind: LineKind::Light, corner: Corner::Square, title: None, role: Part::Node };
 
     /// Also checks the invariant every drawing keeps: each row is exactly as wide as the canvas.
     fn render(canvas: &Canvas<Part>, glyphs: GlyphSet) -> String {
@@ -808,7 +778,7 @@ mod tests {
     #[test]
     fn a_line_ending_on_a_frame_joins_it() {
         let mut canvas = canvas(5, 5);
-        canvas.frame(Rect::new(0, 2, 5, 3), NODE);
+        canvas.frame(Rect::new(0, 2, 5, 3), LineKind::Light, Corner::Square, Part::Node);
 
         line(&mut canvas, (2, 0), (2, 2), LineKind::Light);
 
@@ -821,48 +791,17 @@ mod tests {
         let kinds = [LineKind::Light, LineKind::Heavy, LineKind::Double, LineKind::Dashed];
 
         for (x, kind) in (0..).step_by(4).zip(kinds) {
-            canvas.frame(Rect::new(x, 0, 4, 3), Frame { kind, corner: Corner::Rounded, ..NODE });
+            canvas.frame(Rect::new(x, 0, 4, 3), kind, Corner::Rounded, Part::Node);
         }
-        canvas.frame(Rect::new(16, 0, 1, 3), NODE);
+        canvas.frame(Rect::new(16, 0, 1, 3), LineKind::Light, Corner::Square, Part::Node);
 
         insta::assert_snapshot!(render(&canvas, GlyphSet::Unicode));
     }
 
     #[test]
-    fn a_frame_title_is_cut_to_leave_both_corners() {
-        let mut canvas = canvas(12, 6);
-
-        canvas.frame(Rect::new(0, 0, 12, 3), Frame { title: Some("Group"), ..NODE });
-        canvas.frame(Rect::new(0, 3, 9, 3), Frame { title: Some("Group"), ..NODE });
-
-        assert_eq!(
-            render(&canvas, GlyphSet::Unicode),
-            "┌─ Group ──┐\n│          │\n└──────────┘\n┌─ Gro ─┐   \n│       │   \n└───────┘   "
-        );
-    }
-
-    #[test]
-    fn a_frame_too_narrow_for_a_title_draws_none() {
-        let mut canvas = canvas(6, 2);
-
-        canvas.frame(Rect::new(0, 0, 6, 2), Frame { title: Some("Group"), ..NODE });
-
-        assert_eq!(render(&canvas, GlyphSet::Unicode), "┌────┐\n└────┘");
-    }
-
-    #[test]
-    fn a_frame_title_past_the_canvas_leaves_out_a_wide_character_on_the_last_column() {
-        let mut canvas = canvas(7, 1);
-
-        canvas.frame(Rect::new(0, 0, 20, 3), Frame { title: Some("abc漢"), ..NODE });
-
-        assert_eq!(render(&canvas, GlyphSet::Unicode), "┌─ abc ");
-    }
-
-    #[test]
     fn the_ascii_set_draws_lines_junctions_and_arrows() {
         let mut canvas = canvas(9, 3);
-        canvas.frame(Rect::new(0, 0, 4, 3), Frame { corner: Corner::Rounded, ..NODE });
+        canvas.frame(Rect::new(0, 0, 4, 3), LineKind::Light, Corner::Rounded, Part::Node);
         line(&mut canvas, (3, 1), (8, 1), LineKind::Dashed);
         line(&mut canvas, (6, 0), (6, 2), LineKind::Heavy);
 
@@ -1184,7 +1123,7 @@ mod tests {
                 (width, height) in (0..16u16, 0..16u16),
                 texts in prop::collection::vec((point(), "[a漢\u{301}\u{200b}\t\u{1b} ]{0,8}", 0..12u16), 0..6),
                 lines in prop::collection::vec((straight(), kind()), 0..6),
-                frames in prop::collection::vec((point(), point(), "[b漢 ]{0,6}"), 0..3),
+                frames in prop::collection::vec((point(), point(), kind()), 0..3),
                 fines in prop::collection::vec((finer_than_a_cell(), 0..3u8), 0..8),
                 glyphs in prop_oneof![Just(GlyphSet::Unicode), Just(GlyphSet::Unicode13), Just(GlyphSet::Unicode3), Just(GlyphSet::Ascii)],
             ) {
@@ -1195,8 +1134,8 @@ mod tests {
                 for ((from, to), kind) in lines {
                     canvas.line(from, to, kind, Part::Edge).unwrap();
                 }
-                for (corner, size, title) in &frames {
-                    canvas.frame(Rect::new(corner.x, corner.y, size.x, size.y), Frame { title: Some(title), ..NODE });
+                for (corner, size, kind) in frames {
+                    canvas.frame(Rect::new(corner.x, corner.y, size.x, size.y), kind, Corner::Rounded, Part::Node);
                 }
                 for (at, text, max_width) in &texts {
                     canvas.text_cut(*at, text, *max_width, Part::Label);

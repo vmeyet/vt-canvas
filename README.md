@@ -5,7 +5,7 @@ It is a pure library: it returns styled cells with colour roles and never writes
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for what it owns and [`AGENTS.md`](AGENTS.md) for how to work on it.
 
 ```rust
-use vt_canvas::{Canvas, Corner, Direction, Frame, GlyphSet, LineKind, Point, Rect, Role, Tip};
+use vt_canvas::{Canvas, Corner, Direction, GlyphSet, LineKind, Point, Rect, Role, Tip};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum Part {
@@ -19,12 +19,11 @@ enum Part {
 impl Role for Part {}
 
 let mut canvas = Canvas::new(14, 3)?;
-let node = Frame { kind: LineKind::Light, corner: Corner::Rounded, title: None, role: Part::Node };
-canvas.frame(Rect::new(0, 0, 5, 3), node);
+canvas.frame(Rect::new(0, 0, 5, 3), LineKind::Light, Corner::Rounded, Part::Node);
 canvas.text(Point::new(2, 1), "A", Part::Label);
 canvas.line(Point::new(4, 1), Point::new(7, 1), LineKind::Light, Part::Edge)?;
 canvas.tip(Point::new(8, 1), Direction::Right, Tip::Arrow, Part::Edge);
-canvas.frame(Rect::new(9, 0, 5, 3), node);
+canvas.frame(Rect::new(9, 0, 5, 3), LineKind::Light, Corner::Rounded, Part::Node);
 canvas.text(Point::new(11, 1), "B", Part::Label);
 
 let rows: Vec<String> = canvas.rows(GlyphSet::Unicode).map(|runs| runs.into_iter().map(|run| run.text).collect()).collect();

@@ -5,7 +5,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use unicode_width::UnicodeWidthChar;
-use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, Frame, GlyphSet, LineKind, Pixel, Point, Rect, Shape, Tip, Wedge};
+use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, GlyphSet, LineKind, Pixel, Point, Rect, Shape, Tip, Wedge};
 
 /// Wide enough to reach every clipping branch, small enough to keep each run fast.
 const MAX_SIDE: u16 = 64;
@@ -26,7 +26,7 @@ enum Operation {
     TextCut { at: (u16, u16), text: String, max_width: u16, role: u8 },
     Line { from: (u16, u16), to: (u16, u16), kind: u8, role: u8 },
     Path { points: Vec<(u16, u16)>, kind: u8, role: u8 },
-    Frame { rect: (u16, u16, u16, u16), kind: u8, rounded: bool, title: Option<String>, role: u8 },
+    Frame { rect: (u16, u16, u16, u16), kind: u8, rounded: bool, role: u8 },
     Tip { at: (u16, u16), direction: u8, tip: u8, role: u8 },
     Shape { rect: (u16, u16, u16, u16), shape: u8, role: u8 },
     Column { x: u16, eighths: (u32, u32), role: u8 },
@@ -64,10 +64,9 @@ fn apply(canvas: &mut Canvas<u8>, operation: &Operation) {
             let refused = canvas.path(&points, line_kind(*kind), *role).is_err();
             assert_eq!(refused, points.windows(2).any(|pair| pair[0].x != pair[1].x && pair[0].y != pair[1].y));
         }
-        Operation::Frame { rect, kind, rounded, title, role } => {
+        Operation::Frame { rect, kind, rounded, role } => {
             let corner = if *rounded { Corner::Rounded } else { Corner::Square };
-            let frame = Frame { kind: line_kind(*kind), corner, title: title.as_deref(), role: *role };
-            canvas.frame(self::rect(*rect), frame);
+            canvas.frame(self::rect(*rect), line_kind(*kind), corner, *role);
         }
         Operation::Tip { at, direction, tip, role } => {
             canvas.tip(point(*at), self::direction(*direction), Tip::ALL[usize::from(*tip) % Tip::ALL.len()], *role);

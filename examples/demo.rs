@@ -1,6 +1,6 @@
 //! Draws a small flowchart by hand and prints it with each glyph set: `cargo run --example demo`.
 
-use vt_canvas::{Canvas, Corner, Direction, Error, Frame, GlyphSet, LineKind, Point, Rect, Role, Tip};
+use vt_canvas::{Canvas, Corner, Direction, Error, GlyphSet, LineKind, Point, Rect, Role, Tip};
 
 /// What each cell is drawn for; a real caller maps each one to a colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -15,8 +15,6 @@ enum Part {
 
 impl Role for Part {}
 
-const NODE: Frame<'static, Part> = Frame { kind: LineKind::Light, corner: Corner::Square, title: None, role: Part::Node };
-
 fn main() -> Result<(), Error> {
     let canvas = flowchart()?;
     for glyphs in [GlyphSet::Unicode, GlyphSet::Ascii] {
@@ -30,7 +28,8 @@ fn main() -> Result<(), Error> {
 
 fn flowchart() -> Result<Canvas<Part>, Error> {
     let mut canvas = Canvas::new(41, 14)?;
-    canvas.frame(Rect::new(0, 4, 41, 10), Frame { corner: Corner::Rounded, title: Some("cache"), role: Part::Group, ..NODE });
+    canvas.frame(Rect::new(0, 4, 41, 10), LineKind::Light, Corner::Rounded, Part::Group);
+    canvas.text(Point::new(2, 4), " cache ", Part::Group);
     node(&mut canvas, Rect::new(6, 0, 11, 3), "Request");
     node(&mut canvas, Rect::new(6, 6, 11, 3), "Cached?");
     node(&mut canvas, Rect::new(27, 6, 11, 3), "Fetch");
@@ -49,7 +48,7 @@ fn flowchart() -> Result<Canvas<Part>, Error> {
 }
 
 fn node(canvas: &mut Canvas<Part>, rect: Rect, label: &str) {
-    canvas.frame(rect, NODE);
+    canvas.frame(rect, LineKind::Light, Corner::Square, Part::Node);
     let label_width = u16::try_from(vt_canvas::width(label)).unwrap_or(rect.width);
     canvas.text(Point::new(rect.x + rect.width.saturating_sub(label_width) / 2, rect.y + rect.height / 2), label, Part::Label);
 }

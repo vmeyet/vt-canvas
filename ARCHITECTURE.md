@@ -23,7 +23,7 @@ This page says how the code is laid out today; when a module or a boundary chang
 
 | Module | Holds |
 |---|---|
-| `canvas` | `Canvas`, its cells and their backgrounds, `Frame`, `Run`, `Error` and the size limits |
+| `canvas` | `Canvas`, its cells and their backgrounds, `Corner`, `Run`, `Error` and the size limits |
 | `role` | `Role`: what the canvas asks of the caller's role type, its ASCII texture |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
 | `glyph` | `GlyphSet`: the character for a cell's sides, a tip, a shape's mark or a filled cell, junction tables included |

@@ -12,7 +12,7 @@ mod text;
 mod tip;
 mod wedge;
 
-pub use canvas::{Canvas, Corner, Error, Frame, MAX_CELLS, MAX_WIDTH, Run};
+pub use canvas::{Canvas, Corner, Error, MAX_CELLS, MAX_WIDTH, Run};
 pub use geometry::{Direction, Point, Rect};
 pub use glyph::GlyphSet;
 pub use line::LineKind;
