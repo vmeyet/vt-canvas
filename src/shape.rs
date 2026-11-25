@@ -63,6 +63,8 @@ pub(crate) enum Mark {
     LeftPoint,
     /// `>`
     RightPoint,
+    /// `╳`, `x` in ASCII: a crossed end, drawn alone by [`Canvas::cross`](crate::Canvas::cross).
+    Cross,
 }
 
 /// A mark and the cell it goes on.
@@ -181,6 +183,7 @@ impl Mark {
             Self::RightArc => Self::LeftArc,
             Self::LeftPoint => Self::RightPoint,
             Self::RightPoint => Self::LeftPoint,
+            Self::Cross => Self::Cross,
         }
     }
 }

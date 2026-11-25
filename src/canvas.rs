@@ -226,6 +226,13 @@ impl Canvas {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Arrow { direction, role });
     }
 
+    /// Draws a cross, `╳` (`x` in ASCII): a crossed arrow head, or where a line is struck out.
+    ///
+    /// Like a shape's mark, a line drawn onto it later leaves it whole.
+    pub fn cross(&mut self, at: Point, role: Role) {
+        self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Cross, role });
+    }
+
     /// Each row as runs of `(text, role)`, every row exactly as wide as the canvas and without `\n`.
     pub fn rows(&self, glyphs: GlyphSet) -> impl Iterator<Item = Vec<Run>> + '_ {
         (0..self.height).map(move |y| runs(&self.cells[y * self.width..(y + 1) * self.width], glyphs))
@@ -488,6 +495,17 @@ mod tests {
         line(&mut canvas, (1, 0), (3, 0), LineKind::Double);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "a═══");
+    }
+
+    #[test]
+    fn a_cross_ends_a_line_and_stays_whole_under_another() {
+        let mut canvas = canvas(4, 1);
+        canvas.cross(Point::new(3, 0), Role::Edge);
+
+        line(&mut canvas, (0, 0), (3, 0), LineKind::Light);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "───╳");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "---x");
     }
 
     #[test]

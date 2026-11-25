@@ -77,6 +77,7 @@ The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy
 A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still differs from a square one.
 Slants are `/ \`; brackets and points are the same in both sets.
 Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.
+`Canvas::cross` draws `╳`, `x` in ASCII, and keeps it under a line as a shape's mark is kept.
 
 ## Glyph width
 

@@ -20,7 +20,7 @@ impl GlyphSet {
         }
     }
 
-    /// Brackets and points are ASCII in both sets; only the slants differ.
+    /// Brackets and points are ASCII in both sets; the slants and the cross differ.
     pub(crate) fn mark(self, mark: Mark) -> char {
         match (self, mark) {
             (Self::Unicode, Mark::Rising) => '╱',
@@ -31,6 +31,8 @@ impl GlyphSet {
             (_, Mark::RightArc) => ')',
             (_, Mark::LeftPoint) => '<',
             (_, Mark::RightPoint) => '>',
+            (Self::Unicode, Mark::Cross) => '╳',
+            (Self::Ascii, Mark::Cross) => 'x',
         }
     }
 
@@ -209,7 +211,7 @@ mod tests {
         });
         let lines = all_sides.flat_map(|sides| [false, true].map(|rounded| GlyphSet::Unicode.line(sides, rounded)));
         let arrows = Direction::ALL.map(|direction| GlyphSet::Unicode.arrow(direction));
-        let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint]
+        let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint, Mark::Cross]
             .map(|mark| GlyphSet::Unicode.mark(mark));
         lines.chain(arrows).chain(marks).chain([GlyphSet::Unicode.ellipsis()]).filter(|glyph| *glyph != ' ').collect()
     }
