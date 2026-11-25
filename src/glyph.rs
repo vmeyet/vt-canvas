@@ -1,92 +1,111 @@
+use crate::canvas::Role;
 use crate::geometry::Direction;
 use crate::line::{LineKind, Sides};
 use crate::shape::{Mark, Marker};
 use crate::tip::Tip;
 
-/// The characters lines, frames and arrows are drawn with; text is written as given.
+/// The characters a drawing is read back in; text is written as given.
+///
+/// Each Unicode set holds the glyphs of the ones after it, so a drawing asks for the best glyph and gets the closest the set has.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum GlyphSet {
-    /// Box drawing (`─ ┼ ╭ ┿ ╬ ╱ ╲`) and the small triangles `▴ ▸ ▾ ◂`, which are never East Asian ambiguous.
+    /// Everything [`Unicode13`](Self::Unicode13) has, and the octants of Unicode 16 (U+1CD00…), which few fonts hold yet:
+    /// for terminals that draw block glyphs themselves (Ghostty, kitty, WezTerm, foot).
     #[default]
     Unicode,
-    /// `- | + = . : ' / \ ( ) ^ > v <`, for terminals and files that only take ASCII.
+    /// Everything [`Unicode3`](Self::Unicode3) has, and Symbols for Legacy Computing (Unicode 13, U+1FB00…):
+    /// sextants, wedges, one-eighth lines and the eighth blocks that fill from the top or the right.
+    Unicode13,
+    /// Box drawing (`─ ┼ ╭ ┿ ╬ ╱ ╲`), the small triangles `▴ ▸ ▾ ◂`, block elements (`▁ ▌ ▚ █`) and braille:
+    /// what nearly every monospace font holds.
+    Unicode3,
+    /// `- | + = . : ' / \ ( ) ^ > v < # _ "`, for terminals and files that only take ASCII.
     Ascii,
 }
 
+/// What a filled cell is drawn with in ASCII, one character per series so they differ without colour.
+const ASCII_FILLS: [char; 6] = ['#', '%', '*', 'o', '@', 'x'];
+
 impl GlyphSet {
-    pub(crate) fn line(self, sides: Sides, rounded: bool) -> char {
+    /// Whether every glyph of `other` is in this set.
+    pub(crate) const fn holds(self, other: Self) -> bool {
+        self.rank() >= other.rank()
+    }
+
+    const fn rank(self) -> u8 {
         match self {
-            Self::Unicode => unicode_line(sides, rounded),
-            Self::Ascii => ascii_line(sides, rounded),
+            Self::Ascii => 0,
+            Self::Unicode3 => 1,
+            Self::Unicode13 => 2,
+            Self::Unicode => 3,
         }
     }
 
-    /// Brackets and points are ASCII in both sets; the slants, the cross and the markers differ.
+    const fn pick(self, unicode: char, ascii: char) -> char {
+        if matches!(self, Self::Ascii) { ascii } else { unicode }
+    }
+
+    pub(crate) fn line(self, sides: Sides, rounded: bool) -> char {
+        if self == Self::Ascii { ascii_line(sides, rounded) } else { unicode_line(sides, rounded) }
+    }
+
+    /// Brackets and points are ASCII in every set; the slants, the cross and the markers differ.
     ///
     /// The markers avoid `●` and `◇`, which are East Asian ambiguous.
-    pub(crate) fn mark(self, mark: Mark) -> char {
-        match (self, mark) {
-            (Self::Unicode, Mark::Rising) => '╱',
-            (Self::Unicode, Mark::Falling) => '╲',
-            (Self::Ascii, Mark::Rising) => '/',
-            (Self::Ascii, Mark::Falling) => '\\',
-            (_, Mark::LeftArc) => '(',
-            (_, Mark::RightArc) => ')',
-            (_, Mark::LeftPoint) => '<',
-            (_, Mark::RightPoint) => '>',
-            (Self::Unicode, Mark::Cross) => '╳',
-            (Self::Ascii, Mark::Cross) => 'x',
-            (Self::Unicode, Mark::Marker(Marker::Dot)) => '⬤',
-            (Self::Unicode, Mark::Marker(Marker::RingedDot)) => '◉',
-            (Self::Unicode, Mark::Marker(Marker::Diamond)) => '⬥',
-            (Self::Ascii, Mark::Marker(Marker::Dot)) => '*',
-            (Self::Ascii, Mark::Marker(Marker::RingedDot)) => '@',
-            (Self::Ascii, Mark::Marker(Marker::Diamond)) => '?',
-            (_, Mark::Tip(tip, heading)) => self.tip(tip, heading),
+    pub(crate) const fn mark(self, mark: Mark) -> char {
+        match mark {
+            Mark::Rising => self.pick('╱', '/'),
+            Mark::Falling => self.pick('╲', '\\'),
+            Mark::LeftArc => '(',
+            Mark::RightArc => ')',
+            Mark::LeftPoint => '<',
+            Mark::RightPoint => '>',
+            Mark::Cross => self.pick('╳', 'x'),
+            Mark::Marker(Marker::Dot) => self.pick('⬤', '*'),
+            Mark::Marker(Marker::RingedDot) => self.pick('◉', '@'),
+            Mark::Marker(Marker::Diamond) => self.pick('⬥', '?'),
+            Mark::Tip(tip, heading) => self.tip(tip, heading),
         }
     }
 
     /// A tip facing a node `heading` points at: a fork opens onto it, a hollow head points at it.
-    fn tip(self, tip: Tip, heading: Direction) -> char {
-        match (self, tip, heading) {
-            (Self::Unicode, Tip::Hollow, Direction::Up) => '▵',
-            (Self::Unicode, Tip::Hollow, Direction::Right) => '▹',
-            (Self::Unicode, Tip::Hollow, Direction::Down) => '▿',
-            (Self::Unicode, Tip::Hollow, Direction::Left) => '◃',
-            (Self::Ascii, Tip::Hollow, direction) => self.arrow(direction),
-            (Self::Unicode, Tip::Diamond, _) => '⬦',
-            (Self::Unicode, Tip::FilledDiamond, _) => '⬥',
-            (Self::Ascii, Tip::Diamond, _) | (_, Tip::Ring, _) => 'o',
-            (Self::Ascii, Tip::FilledDiamond, _) => '#',
-            (Self::Unicode, Tip::Bar, _) => '┼',
-            (Self::Ascii, Tip::Bar, _) => '+',
-            (_, Tip::Fork, Direction::Right) => '<',
-            (_, Tip::Fork, Direction::Left) => '>',
-            (Self::Unicode, Tip::Fork, Direction::Down) => 'Ʌ',
-            (Self::Ascii, Tip::Fork, Direction::Down) => '^',
-            (Self::Unicode, Tip::Fork, Direction::Up) => 'V',
-            (Self::Ascii, Tip::Fork, Direction::Up) => 'v',
+    const fn tip(self, tip: Tip, heading: Direction) -> char {
+        match (tip, heading) {
+            (Tip::Hollow, Direction::Up) => self.pick('▵', '^'),
+            (Tip::Hollow, Direction::Right) => self.pick('▹', '>'),
+            (Tip::Hollow, Direction::Down) => self.pick('▿', 'v'),
+            (Tip::Hollow, Direction::Left) => self.pick('◃', '<'),
+            (Tip::Diamond, _) => self.pick('⬦', 'o'),
+            (Tip::FilledDiamond, _) => self.pick('⬥', '#'),
+            (Tip::Ring, _) => 'o',
+            (Tip::Bar, _) => self.pick('┼', '+'),
+            (Tip::Fork, Direction::Right) => '<',
+            (Tip::Fork, Direction::Left) => '>',
+            (Tip::Fork, Direction::Down) => self.pick('Ʌ', '^'),
+            (Tip::Fork, Direction::Up) => self.pick('V', 'v'),
         }
     }
 
     /// `⋯`, not `…`, which is East Asian ambiguous.
-    pub(crate) fn ellipsis(self) -> char {
-        match self {
-            Self::Unicode => '⋯',
-            Self::Ascii => '~',
+    pub(crate) const fn ellipsis(self) -> char {
+        self.pick('⋯', '~')
+    }
+
+    pub(crate) const fn arrow(self, direction: Direction) -> char {
+        match direction {
+            Direction::Up => self.pick('▴', '^'),
+            Direction::Right => self.pick('▸', '>'),
+            Direction::Down => self.pick('▾', 'v'),
+            Direction::Left => self.pick('◂', '<'),
         }
     }
 
-    pub(crate) fn arrow(self, direction: Direction) -> char {
-        match (self, direction) {
-            (Self::Unicode, Direction::Up) => '▴',
-            (Self::Unicode, Direction::Right) => '▸',
-            (Self::Unicode, Direction::Down) => '▾',
-            (Self::Unicode, Direction::Left) => '◂',
-            (Self::Ascii, Direction::Up) => '^',
-            (Self::Ascii, Direction::Right) => '>',
-            (Self::Ascii, Direction::Down) => 'v',
-            (Self::Ascii, Direction::Left) => '<',
+    /// A whole cell in `role`: `█`, or in ASCII a character of its own for each of the first series.
+    pub(crate) const fn fill(self, role: Role) -> char {
+        match (self, role) {
+            (Self::Ascii, Role::Series(series)) => ASCII_FILLS[series as usize % ASCII_FILLS.len()],
+            (Self::Ascii, _) => ASCII_FILLS[0],
+            _ => '█',
         }
     }
 }
@@ -249,7 +268,15 @@ mod tests {
             .chain(Marker::ALL.map(Mark::Marker))
             .chain(Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|heading| Mark::Tip(tip, heading))))
             .map(|mark| GlyphSet::Unicode.mark(mark));
-        lines.chain(arrows).chain(marks).chain([GlyphSet::Unicode.ellipsis()]).filter(|glyph| *glyph != ' ').collect()
+        let fills = [GlyphSet::Unicode.fill(Role::Plain)];
+        lines
+            .chain(arrows)
+            .chain(marks)
+            .chain(fills)
+            .chain([GlyphSet::Unicode.ellipsis()])
+            .chain(crate::block::tests::every_glyph())
+            .filter(|glyph| *glyph != ' ')
+            .collect()
     }
 
     #[test]
@@ -269,14 +296,33 @@ mod tests {
         assert_eq!(wide, Vec::<char>::new());
     }
 
-    /// Box drawing is East Asian ambiguous in Unicode yet drawn one column wide by terminals; it has no replacement.
+    /// Box drawing and block elements are East Asian ambiguous in Unicode yet drawn one column wide by terminals; they have no replacement.
     #[test]
-    fn no_unicode_glyph_outside_box_drawing_is_east_asian_ambiguous() {
-        let box_drawing = '\u{2500}'..='\u{257F}';
+    fn no_unicode_glyph_outside_box_drawing_and_block_elements_is_east_asian_ambiguous() {
+        let exempt = '\u{2500}'..='\u{259F}';
         let ambiguous: Vec<char> =
-            every_unicode_glyph().into_iter().filter(|glyph| !box_drawing.contains(glyph) && glyph.width_cjk() != Some(1)).collect();
+            every_unicode_glyph().into_iter().filter(|glyph| !exempt.contains(glyph) && glyph.width_cjk() != Some(1)).collect();
 
         assert_eq!(ambiguous, Vec::<char>::new());
+    }
+
+    #[test]
+    fn a_unicode_set_holds_the_glyphs_of_the_sets_after_it() {
+        let sets = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
+
+        let held: Vec<usize> = sets.map(|set| sets.into_iter().filter(|other| set.holds(*other)).count()).to_vec();
+
+        assert_eq!(held, [4, 3, 2, 1]);
+    }
+
+    #[test]
+    fn ascii_fills_each_series_with_a_character_of_its_own() {
+        let fills: String = [Role::Node, Role::Series(0), Role::Series(1), Role::Series(5), Role::Series(6)]
+            .map(|role| GlyphSet::Ascii.fill(role))
+            .into_iter()
+            .collect();
+
+        assert_eq!(fills, "##%x#");
     }
 
     #[test]

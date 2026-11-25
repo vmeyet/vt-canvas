@@ -1,5 +1,7 @@
 use std::fmt;
+use std::ops::Range;
 
+use crate::block::{self, Block};
 use crate::geometry::{Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
@@ -27,6 +29,10 @@ pub enum Role {
     Label,
     /// The frame around a group of nodes.
     Group,
+    /// A chart's axis and its ticks.
+    Axis,
+    /// The marks of a chart's series, counted from 0; the caller maps each number to a colour of its palette.
+    Series(u8),
 }
 
 /// A stretch of one row whose cells share a role.
@@ -36,6 +42,8 @@ pub struct Run {
     pub text: String,
     /// The role every cell of the run has.
     pub role: Role,
+    /// The role behind the cells' characters, `None` where nothing is: a block a later drawing left as its background.
+    pub background: Option<Role>,
 }
 
 /// The corners of a [`Frame`].
@@ -124,16 +132,37 @@ enum Cell {
         mark: Mark,
         role: Role,
     },
+    Block {
+        block: Block,
+        role: Role,
+    },
+}
+
+impl Cell {
+    /// The role a drawing over this cell keeps behind it: a block's, when it fills at least half the cell.
+    const fn behind(self) -> Option<Role> {
+        match self {
+            Self::Block { block, role } if block.fills_half() => Some(role),
+            _ => None,
+        }
+    }
+
+    const fn fills_cell(self) -> bool {
+        matches!(self, Self::Block { block, .. } if block.fills_cell())
+    }
 }
 
 /// A grid of cells to draw text, lines, frames and arrows on, read back as rows of styled runs.
 ///
-/// Drawing out of bounds is clipped; the last drawing on a cell wins, except that lines merge into junctions.
+/// Drawing out of bounds is clipped; the last drawing on a cell wins, except that lines merge into junctions
+/// and a block at least half a cell stays behind what is drawn over it, as the cell's background.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Canvas {
     width: usize,
     height: usize,
     cells: Vec<Cell>,
+    /// The role behind each cell's glyph.
+    grounds: Vec<Option<Role>>,
 }
 
 impl Canvas {
@@ -143,7 +172,7 @@ impl Canvas {
         if width > MAX_WIDTH || columns * rows > MAX_CELLS {
             return Err(Error::TooLarge { width, height });
         }
-        Ok(Self { width: columns, height: rows, cells: vec![Cell::Empty; columns * rows] })
+        Ok(Self { width: columns, height: rows, cells: vec![Cell::Empty; columns * rows], grounds: vec![None; columns * rows] })
     }
 
     /// Writes `text` on one row from `at`, cut at the right edge; see [`width`](crate::width) for what it leaves out.
@@ -254,9 +283,29 @@ impl Canvas {
         }
     }
 
-    /// Each row as runs of `(text, role)`, every row exactly as wide as the canvas and without `\n`.
+    /// Fills column `x` between two heights, each counted in eighths of a row from the top of the canvas.
+    ///
+    /// A bar standing on the bottom of row 9 and 2.5 rows tall is `column(x, 60..80, role)`.
+    /// A stretch that touches neither end of its cell has no glyph, so it moves to the end it is nearer.
+    pub fn column(&mut self, x: u16, eighths: Range<u32>, role: Role) {
+        for (y, block) in block::span(eighths, self.height, Direction::Up) {
+            self.put(usize::from(x), y, Cell::Block { block, role });
+        }
+    }
+
+    /// Fills row `y` between two offsets, each counted in eighths of a column from the left of the canvas.
+    pub fn row(&mut self, y: u16, eighths: Range<u32>, role: Role) {
+        for (x, block) in block::span(eighths, self.width, Direction::Left) {
+            self.put(x, usize::from(y), Cell::Block { block, role });
+        }
+    }
+
+    /// Each row as runs of text sharing a role and a background, every row exactly as wide as the canvas and without `\n`.
     pub fn rows(&self, glyphs: GlyphSet) -> impl Iterator<Item = Vec<Run>> + '_ {
-        (0..self.height).map(move |y| runs(&self.cells[y * self.width..(y + 1) * self.width], glyphs))
+        (0..self.height).map(move |y| {
+            let row = y * self.width..(y + 1) * self.width;
+            runs(&self.cells[row.clone()], &self.grounds[row], glyphs)
+        })
     }
 
     /// `from` and `to` share a row or a column.
@@ -331,6 +380,7 @@ impl Canvas {
         if x + 1 < self.width && self.cells[index + 1] == Cell::WideTail {
             self.cells[index + 1] = Cell::Empty;
         }
+        self.grounds[index] = if cell.fills_cell() { None } else { self.cells[index].behind().or(self.grounds[index]) };
         self.cells[index] = cell;
     }
 
@@ -344,24 +394,39 @@ fn segment(at: u16, low: u16, high: u16, kind: LineKind, before: Direction) -> S
     Sides::default().with(before, (at > low).then_some(kind)).with(before.opposite(), (at < high).then_some(kind))
 }
 
-fn runs(cells: &[Cell], glyphs: GlyphSet) -> Vec<Run> {
+/// A cell as it is written: its character, the role it is drawn in and the role behind it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Styled {
+    pub(crate) char: char,
+    pub(crate) role: Role,
+    pub(crate) background: Option<Role>,
+}
+
+fn runs(cells: &[Cell], grounds: &[Option<Role>], glyphs: GlyphSet) -> Vec<Run> {
     let mut runs: Vec<Run> = Vec::new();
-    for cell in cells {
-        let (char, role) = match *cell {
-            Cell::Empty => (' ', Role::Plain),
-            Cell::WideTail => continue,
-            Cell::Text { char, role } => (char, role),
-            Cell::Line { sides, rounded, role } => (glyphs.line(sides, rounded), role),
-            Cell::Arrow { direction, role } => (glyphs.arrow(direction), role),
-            Cell::Ellipsis { role } => (glyphs.ellipsis(), role),
-            Cell::Mark { mark, role } => (glyphs.mark(mark), role),
-        };
+    for (cell, ground) in cells.iter().zip(grounds) {
+        let Some(Styled { char, role, background }) = styled(*cell, *ground, glyphs) else { continue };
         match runs.last_mut() {
-            Some(run) if run.role == role => run.text.push(char),
-            _ => runs.push(Run { text: char.to_string(), role }),
+            Some(run) if run.role == role && run.background == background => run.text.push(char),
+            _ => runs.push(Run { text: char.to_string(), role, background }),
         }
     }
     runs
+}
+
+/// `None` for the right half of a wide character, written with its left half.
+fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> {
+    let (char, role) = match cell {
+        Cell::Empty => (' ', Role::Plain),
+        Cell::WideTail => return None,
+        Cell::Text { char, role } => (char, role),
+        Cell::Line { sides, rounded, role } => (glyphs.line(sides, rounded), role),
+        Cell::Arrow { direction, role } => (glyphs.arrow(direction), role),
+        Cell::Ellipsis { role } => (glyphs.ellipsis(), role),
+        Cell::Mark { mark, role } => (glyphs.mark(mark), role),
+        Cell::Block { block, role } => return Some(block.styled(role, ground, glyphs)),
+    };
+    Some(Styled { char, role, background: ground })
 }
 
 #[cfg(test)]
@@ -753,8 +818,106 @@ mod tests {
 
         let runs: Vec<Run> = canvas.rows(GlyphSet::Unicode).flatten().collect();
 
-        let run = |text: &str, role| Run { text: text.to_owned(), role };
+        let run = |text: &str, role| Run { text: text.to_owned(), role, background: None };
         assert_eq!(runs, [run(" ", Role::Plain), run("ab", Role::Label), run("──", Role::Edge), run(" ", Role::Plain)]);
+    }
+
+    /// Each run as its text, its role and its background, so a test sees which role a cell kept.
+    fn styles(canvas: &Canvas, glyphs: GlyphSet) -> Vec<String> {
+        canvas
+            .rows(glyphs)
+            .map(|runs| runs.into_iter().map(|run| format!("[{} {:?} on {:?}]", run.text, run.role, run.background)).collect())
+            .collect()
+    }
+
+    #[test]
+    fn a_column_stands_on_the_bottom_of_a_row_in_eighths() {
+        let mut canvas = canvas(3, 3);
+
+        canvas.column(0, 4..24, Role::Series(0));
+        canvas.column(1, 21..24, Role::Series(0));
+        canvas.column(2, 0..3, Role::Series(0));
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "▄ 🮃\n█  \n█▃ ");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "# \"\n#  \n#_ ");
+    }
+
+    #[test]
+    fn a_row_starts_at_the_left_in_eighths() {
+        let mut canvas = canvas(3, 2);
+
+        canvas.row(0, 0..19, Role::Series(0));
+        canvas.row(1, 21..80, Role::Series(1));
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "██▍\n  🮈");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "##|\n  |");
+    }
+
+    #[test]
+    fn a_drawing_over_a_block_at_least_half_a_cell_keeps_it_as_background() {
+        let mut canvas = canvas(3, 1);
+        canvas.column(0, 0..8, Role::Series(0));
+        canvas.column(1, 4..8, Role::Series(0));
+        canvas.column(2, 5..8, Role::Series(0));
+
+        canvas.text(Point::new(0, 0), "abc", Role::Label);
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[ab Label on Some(Series(0))][c Label on None]"]);
+    }
+
+    #[test]
+    fn a_line_over_a_block_keeps_it_as_background() {
+        let mut canvas = canvas(3, 1);
+        canvas.column(1, 0..8, Role::Series(2));
+
+        line(&mut canvas, (0, 0), (2, 0), LineKind::Light);
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[─ Edge on None][─ Edge on Some(Series(2))][─ Edge on None]"]);
+    }
+
+    #[test]
+    fn a_block_over_a_block_keeps_the_first_as_background() {
+        let mut canvas = canvas(1, 2);
+        canvas.column(0, 0..16, Role::Series(1));
+
+        canvas.column(0, 11..16, Role::Series(0));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[█ Series(1) on None]", "[▅ Series(0) on Some(Series(1))]"]);
+    }
+
+    #[test]
+    fn a_background_stays_under_every_drawing_that_follows() {
+        let mut canvas = canvas(1, 1);
+        canvas.column(0, 0..8, Role::Series(1));
+        canvas.column(0, 6..8, Role::Series(0));
+
+        canvas.text(Point::new(0, 0), "a", Role::Label);
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[a Label on Some(Series(1))]"]);
+    }
+
+    #[test]
+    fn a_whole_block_leaves_no_background() {
+        let mut canvas = canvas(1, 1);
+        canvas.column(0, 0..8, Role::Series(1));
+
+        canvas.column(0, 0..8, Role::Series(0));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[█ Series(0) on None]"]);
+    }
+
+    #[test]
+    fn cells_with_different_backgrounds_are_different_runs() {
+        let mut canvas = canvas(4, 1);
+        canvas.row(0, 8..16, Role::Series(0));
+        canvas.row(0, 16..24, Role::Series(1));
+
+        canvas.text(Point::new(0, 0), "abcd", Role::Label);
+
+        assert_eq!(
+            styles(&canvas, GlyphSet::Unicode),
+            ["[a Label on None][b Label on Some(Series(0))][c Label on Some(Series(1))][d Label on None]"]
+        );
     }
 
     mod properties {

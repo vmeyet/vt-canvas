@@ -1,0 +1,20 @@
+---
+source: src/block.rs
+expression: "table.join(\"\\n\")"
+---
+Unicode from Up: ▔🮂🮃▀🮄🮅🮆█
+Unicode from Right: ▕🮇🮈▐🮉🮊🮋█
+Unicode from Down: ▁▂▃▄▅▆▇█
+Unicode from Left: ▏▎▍▌▋▊▉█
+Unicode13 from Up: ▔🮂🮃▀🮄🮅🮆█
+Unicode13 from Right: ▕🮇🮈▐🮉🮊🮋█
+Unicode13 from Down: ▁▂▃▄▅▆▇█
+Unicode13 from Left: ▏▎▍▌▋▊▉█
+Unicode3 from Up: ▔▔▀▀▀███
+Unicode3 from Right: ▕▕▐▐▐███
+Unicode3 from Down: ▁▂▃▄▅▆▇█
+Unicode3 from Left: ▏▎▍▌▋▊▉█
+Ascii from Up: """%%%%%
+Ascii from Right: |||%%%%%
+Ascii from Down: ___%%%%%
+Ascii from Left: |||%%%%%

@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+mod block;
 mod canvas;
 mod geometry;
 mod glyph;

@@ -6,12 +6,11 @@ This page says how the code is laid out today; when a module or a boundary chang
 
 ## Owns
 
-- The cell grid: each cell holds one glyph, its width and a colour role.
+- The cell grid: each cell holds one glyph, its width, a colour role and the role behind it.
 - Drawing on it: text, lines and boxes whose crossings merge into the right junction glyph, and node shapes.
+- Drawing finer than a cell: blocks filling a cell by eighths.
 - Glyph sets: which characters a drawing uses, avoiding East Asian ambiguous-width glyphs where Unicode has a choice.
 - Measuring text: `width` says how many columns `Canvas::text` gives a string, so a caller sizes a box with the rule the canvas draws with.
-
-Sub-cell pixels and layers come with the charts.
 
 ## Never
 
@@ -24,9 +23,10 @@ Sub-cell pixels and layers come with the charts.
 
 | Module | Holds |
 |---|---|
-| `canvas` | `Canvas`, its cells, `Frame`, `Role`, `Run`, `Error` and the size limits |
+| `canvas` | `Canvas`, its cells and their backgrounds, `Frame`, `Role`, `Run`, `Error` and the size limits |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
-| `glyph` | `GlyphSet`: the character for a cell's sides, an arrow or a shape's mark, junction tables included |
+| `glyph` | `GlyphSet`: the character for a cell's sides, an arrow, a shape's mark or a filled cell, junction tables included |
+| `block` | A cell filled by eighths from one side, its glyph in each set, and the cells a stretch covers |
 | `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines; `Marker`, a node on one cell |
 | `tip` | `Tip`: what an edge draws where it meets a node, a class relation's head or a crow's foot's part |
 | `text` | Which characters a cell can hold and how wide they are |
@@ -43,9 +43,28 @@ Sub-cell pixels and layers come with the charts.
   Writing over either half of a wide character blanks the other half; a wide character without room for both halves is not drawn.
 - Text: control and zero-width characters are left out, so every row is exactly as wide as the canvas.
   `text_cut` cuts text to a width and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
-- Roles: `Plain`, `Node`, `Edge`, `Label`, `Group`; the caller maps each one to a colour.
-- Output: `rows` yields each row as runs of text sharing a role, without `\n`.
+- Roles: `Plain`, `Node`, `Edge`, `Label`, `Group`, `Axis` and `Series(n)`, a chart's series counted from 0; the caller maps each one to a colour.
+- Output: `rows` yields each row as runs of text sharing a role and a background, without `\n`.
+  A run's `background` is the role behind its characters, `None` where nothing is.
 - Cost at the cell limit, measured on an Apple M5 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 5 ms and reads back in 15 ms, in about 9 MB.
+
+## Finer than a cell
+
+`column` and `row` fill a stretch of one column or one row, its two ends counted in eighths of a cell from the top or the left of the canvas.
+Each cell the stretch covers becomes a block filled from one of its sides: `▁▂▃▄▅▆▇█` from the bottom, `▏▎▍▌▋▊▉█` from the left, `▔🮂🮃▀🮄🮅🮆█` from the top, `▕🮇🮈▐🮉🮊🮋█` from the right.
+A stretch that touches neither side of its cell has no glyph: it keeps its size and moves to the side it is nearer.
+
+## Layers
+
+A terminal cell has one character, one colour for it and one colour behind it, so a cell shows two roles at most.
+Each cell keeps a glyph with its role and, behind it, a *background* role.
+
+1. A drawing replaces the cell's glyph; the last one wins, as for text and lines.
+2. When the glyph it replaces is a block filling at least half the cell, that block's role becomes the background; a smaller block is dropped.
+3. Otherwise the background stays as it was, until a drawing that fills the whole cell clears it.
+
+So text or a line over a bar is drawn on the bar's colour, and a block drawn over a taller one shows both: `▅` in its role on the other's.
+Where a third role would be needed (a line through the cell a bar ends in), the bar gains or loses under half a cell.
 
 ## Shapes
 
@@ -74,6 +93,20 @@ Two lines crossing draw `┼`, never a "pass over" where the line drawn first st
 Tried on the flowchart spike's output: frames are drawn before edges, so a pass over cut every edge where it left a group, which read as the edge ending at the frame; between two edges it broke one of them, which made it harder to follow.
 Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a join.
 
+## Glyph sets
+
+`rows` takes the set a drawing is read in; the drawing is the same for every set, and each glyph falls back to the closest one the set holds.
+
+| Set | Holds | Falls back |
+|---|---|---|
+| `Unicode` | Everything, octants (Unicode 16) included | |
+| `Unicode13` | Symbols for Legacy Computing: the eighth blocks from the top and the right | |
+| `Unicode3` | Box drawing, block elements, braille | A block from the top or the right is the nearest of `▔ ▀ █`, `▕ ▐ █` |
+| `Ascii` | ASCII | A block at least half a cell is `#`, a smaller one `_`, `"` or `|` on the side it starts from |
+
+In ASCII a filled cell is `# % * o @ x` for series 0 to 5, then again from `#`, so series differ without colour.
+A cell holding a block under half on a background shows the background's character, the one filling more of it.
+
 The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy or double, `.` when dashed, and a vertical run as `|`, `:` when dashed.
 A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still differs from a square one.
 Slants are `/ \`; brackets and points are the same in both sets.
@@ -88,7 +121,7 @@ Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.
 
 Every glyph of the Unicode set is one column wide, tested.
 Outside the box drawing block none is East Asian ambiguous: arrows are `▴ ▸ ▾ ◂`, not `▲ ▶ ▼ ◀`, and slants are `╱ ╲` from the block, not `◢ ◣`.
-Box drawing itself (U+2500 to U+257F) is ambiguous in Unicode; it has no replacement and terminals draw it one column wide, so the test exempts that block.
+Box drawing and block elements (U+2500 to U+259F) are ambiguous in Unicode; they have no replacement and terminals draw them one column wide, so the test exempts those two blocks.
 
 ## Dependency direction
 
