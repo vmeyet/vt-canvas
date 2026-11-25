@@ -7,7 +7,7 @@ This page says how the code is laid out today; when a module or a boundary chang
 ## Owns
 
 - The cell grid: each cell holds one glyph, its width and a colour role.
-- Drawing on it: text, lines and boxes whose crossings merge into the right junction glyph.
+- Drawing on it: text, lines and boxes whose crossings merge into the right junction glyph, and node shapes.
 - Glyph sets: which characters a drawing uses, avoiding East Asian ambiguous-width glyphs where Unicode has a choice.
 - Measuring text: `width` says how many columns `Canvas::text` gives a string, so a caller sizes a box with the rule the canvas draws with.
 
@@ -26,7 +26,8 @@ Sub-cell pixels and layers come with the charts.
 |---|---|
 | `canvas` | `Canvas`, its cells, `Frame`, `Role`, `Run`, `Error` and the size limits |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
-| `glyph` | `GlyphSet`: the character for a cell's sides or an arrow, junction tables included |
+| `glyph` | `GlyphSet`: the character for a cell's sides, an arrow or a shape's mark, junction tables included |
+| `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines |
 | `text` | Which characters a cell can hold and how wide they are |
 | `geometry` | `Point`, `Rect`, `Direction` |
 
@@ -37,12 +38,23 @@ Sub-cell pixels and layers come with the charts.
 - Lines are horizontal or vertical; a diagonal is `Error::Diagonal`.
   A line with both ends on one cell draws nothing.
   A path is a line from each point to the next, turning a corner at each point between; a diagonal step refuses the whole path before anything is drawn.
-- Overwriting: the last drawing on a cell wins, except that a line drawn on a line merges with it.
+- Overwriting: the last drawing on a cell wins, except that a line drawn on a line merges with it, and a line drawn on a shape's mark leaves the mark.
   Writing over either half of a wide character blanks the other half; a wide character without room for both halves is not drawn.
 - Text: control and zero-width characters are left out, so every row is exactly as wide as the canvas.
   `text_cut` cuts text to a width and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
 - Roles: `Plain`, `Node`, `Edge`, `Label`, `Group`; the caller maps each one to a colour.
 - Output: `rows` yields each row as runs of text sharing a role, without `\n`.
+
+## Shapes
+
+`Canvas::shape` draws one of Mermaid's flowchart shapes on the border of a rectangle: a light frame, some of its cells replaced by *marks*, slants `╱ ╲` and brackets `( ) < >`.
+
+- Every border cell keeps a glyph, so a line ending on any side of the rectangle touches the shape.
+  A line ending on a frame cell joins it (`┤`); one ending on a mark leaves it whole (`──<`).
+- A shape is told apart by its corners and its sides: square or rounded corners, `╱ ╲` corners for a diamond, `< >` sides for a hexagon, `( )` for a stadium.
+- A side that points out (hexagon, asymmetric) points at its middle row, or between its two middle rows when the count is even.
+- A circle is a stadium with a blank column inside each bracket: three rows cannot curve more.
+- `Shape::inset` gives the columns and rows the outline takes, so the caller sizes the rectangle around its content.
 
 ## Junctions
 
@@ -62,12 +74,13 @@ Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a 
 
 The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy or double, `.` when dashed, and a vertical run as `|`, `:` when dashed.
 A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still differs from a square one.
+Slants are `/ \`; brackets and points are the same in both sets.
 Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.
 
 ## Glyph width
 
 Every glyph of the Unicode set is one column wide, tested.
-Outside the box drawing block none is East Asian ambiguous: arrows are `▴ ▸ ▾ ◂`, not `▲ ▶ ▼ ◀`.
+Outside the box drawing block none is East Asian ambiguous: arrows are `▴ ▸ ▾ ◂`, not `▲ ▶ ▼ ◀`, and slants are `╱ ╲` from the block, not `◢ ◣`.
 Box drawing itself (U+2500 to U+257F) is ambiguous in Unicode; it has no replacement and terminals draw it one column wide, so the test exempts that block.
 
 ## Dependency direction

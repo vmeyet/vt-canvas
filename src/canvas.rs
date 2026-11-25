@@ -3,6 +3,7 @@ use std::fmt;
 use crate::geometry::{Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
+use crate::shape::{Mark, Shape};
 use crate::text;
 
 /// Widest canvas [`Canvas::new`] accepts, in columns.
@@ -117,6 +118,11 @@ enum Cell {
         direction: Direction,
         role: Role,
     },
+    /// A cell of a shape's outline that is not a line.
+    Mark {
+        mark: Mark,
+        role: Role,
+    },
 }
 
 /// A grid of cells to draw text, lines, frames and arrows on, read back as rows of styled runs.
@@ -199,6 +205,22 @@ impl Canvas {
         }
     }
 
+    /// Draws the outline of `shape` on the border of `rect`; content goes inside its [`inset`](Shape::inset).
+    ///
+    /// A line drawn onto a slant or a bracket of the outline leaves it whole, so an edge ending on a side touches it.
+    pub fn shape(&mut self, rect: Rect, shape: Shape, role: Role) {
+        if rect.width == 0 || rect.height == 0 {
+            return;
+        }
+        self.frame(rect, Frame { kind: LineKind::Light, corner: shape.corner(), title: None, role });
+        for [from, to] in shape.inner_lines(rect) {
+            self.straight(from, to, LineKind::Light, role);
+        }
+        for placed in shape.marks(rect) {
+            self.put(usize::from(placed.at.x), usize::from(placed.at.y), Cell::Mark { mark: placed.mark, role });
+        }
+    }
+
     /// Draws an arrow head pointing to `direction`.
     pub fn arrow(&mut self, at: Point, direction: Direction, role: Role) {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Arrow { direction, role });
@@ -256,6 +278,7 @@ impl Canvas {
         let Some(index) = self.index(x, y).filter(|_| sides.count() > 0) else { return };
         match self.cells[index] {
             Cell::Line { sides: below, rounded, .. } => self.cells[index] = Cell::Line { sides: below.merge(sides), rounded, role },
+            Cell::Mark { .. } => {}
             _ => self.put(x, y, Cell::Line { sides, rounded: false, role }),
         }
     }
@@ -300,6 +323,7 @@ fn runs(cells: &[Cell], glyphs: GlyphSet) -> Vec<Run> {
             Cell::Line { sides, rounded, role } => (glyphs.line(sides, rounded), role),
             Cell::Arrow { direction, role } => (glyphs.arrow(direction), role),
             Cell::Ellipsis { role } => (glyphs.ellipsis(), role),
+            Cell::Mark { mark, role } => (glyphs.mark(mark), role),
         };
         match runs.last_mut() {
             Some(run) if run.role == role => run.text.push(char),

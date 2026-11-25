@@ -1,13 +1,14 @@
 use crate::geometry::Direction;
 use crate::line::{LineKind, Sides};
+use crate::shape::Mark;
 
 /// The characters lines, frames and arrows are drawn with; text is written as given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum GlyphSet {
-    /// Box drawing (`─ ┼ ╭ ┿ ╬`) and the small triangles `▴ ▸ ▾ ◂`, which are never East Asian ambiguous.
+    /// Box drawing (`─ ┼ ╭ ┿ ╬ ╱ ╲`) and the small triangles `▴ ▸ ▾ ◂`, which are never East Asian ambiguous.
     #[default]
     Unicode,
-    /// `- | + = . : ' ^ > v <`, for terminals and files that only take ASCII.
+    /// `- | + = . : ' / \ ( ) ^ > v <`, for terminals and files that only take ASCII.
     Ascii,
 }
 
@@ -16,6 +17,20 @@ impl GlyphSet {
         match self {
             Self::Unicode => unicode_line(sides, rounded),
             Self::Ascii => ascii_line(sides, rounded),
+        }
+    }
+
+    /// Brackets and points are ASCII in both sets; only the slants differ.
+    pub(crate) fn mark(self, mark: Mark) -> char {
+        match (self, mark) {
+            (Self::Unicode, Mark::Rising) => '╱',
+            (Self::Unicode, Mark::Falling) => '╲',
+            (Self::Ascii, Mark::Rising) => '/',
+            (Self::Ascii, Mark::Falling) => '\\',
+            (_, Mark::LeftArc) => '(',
+            (_, Mark::RightArc) => ')',
+            (_, Mark::LeftPoint) => '<',
+            (_, Mark::RightPoint) => '>',
         }
     }
 
@@ -194,7 +209,9 @@ mod tests {
         });
         let lines = all_sides.flat_map(|sides| [false, true].map(|rounded| GlyphSet::Unicode.line(sides, rounded)));
         let arrows = Direction::ALL.map(|direction| GlyphSet::Unicode.arrow(direction));
-        lines.chain(arrows).chain([GlyphSet::Unicode.ellipsis()]).filter(|glyph| *glyph != ' ').collect()
+        let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint]
+            .map(|mark| GlyphSet::Unicode.mark(mark));
+        lines.chain(arrows).chain(marks).chain([GlyphSet::Unicode.ellipsis()]).filter(|glyph| *glyph != ' ').collect()
     }
 
     #[test]

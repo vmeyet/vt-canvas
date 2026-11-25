@@ -1,0 +1,23 @@
+---
+source: src/shape.rs
+expression: "drawn.join(\"\\n\\n\")"
+---
+╱───────╲
+╱ Label ╲
+╲ Label ╱
+╲───────╱
+
+╲───────┐
+╲ Label │
+╱ Label │
+╱───────┘
+
+╭───────╮
+( Label )
+( Label )
+╰───────╯
+
+╭─────────╮
+(( Label ))
+(( Label ))
+╰─────────╯

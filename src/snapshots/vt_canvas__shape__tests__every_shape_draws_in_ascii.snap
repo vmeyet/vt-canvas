@@ -1,0 +1,74 @@
+---
+source: src/shape.rs
+expression: "every_shape(|shape| node(shape, 1), GlyphSet::Ascii)"
+---
+Rectangle
++-------+
+| Label |
++-------+
+
+Rounded
+.-------.
+| Label |
+'-------'
+
+Stadium
+.-------.
+( Label )
+'-------'
+
+Circle
+.---------.
+(  Label  )
+'---------'
+
+DoubleCircle
+.---------.
+(( Label ))
+'---------'
+
+Subroutine
+++-------++
+|| Label ||
+++-------++
+
+Cylinder
+.-------.
++-------+
+| Label |
+'-------'
+
+Diamond
+/-------\
+| Label |
+\-------/
+
+Hexagon
+/-------\
+< Label >
+\-------/
+
+LeanRight
+/-------/
+/ Label /
+/-------/
+
+LeanLeft
+\-------\
+\ Label \
+\-------\
+
+Trapezoid
+/-------\
+/ Label \
+/-------\
+
+InvertedTrapezoid
+\-------/
+\ Label /
+\-------/
+
+Asymmetric
+\-------+
+> Label |
+/-------+
