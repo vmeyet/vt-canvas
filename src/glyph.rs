@@ -48,7 +48,7 @@ impl GlyphSet {
         if self == Self::Ascii { ascii_line(sides, rounded) } else { unicode_line(sides, rounded) }
     }
 
-    /// Brackets and points are ASCII in every set; the slants, the cross and the markers differ.
+    /// Brackets and points are ASCII in every set; the slants and the markers differ.
     ///
     /// The markers avoid `●` and `◇`, which are East Asian ambiguous.
     pub(crate) const fn mark(self, mark: Mark) -> char {
@@ -59,21 +59,21 @@ impl GlyphSet {
             Mark::RightArc => ')',
             Mark::LeftPoint => '<',
             Mark::RightPoint => '>',
-            Mark::Cross => self.pick('╳', 'x'),
             Mark::Marker(Marker::Dot) => self.pick('⬤', '*'),
             Mark::Marker(Marker::RingedDot) => self.pick('◉', '@'),
             Mark::Marker(Marker::Diamond) => self.pick('⬥', '?'),
-            Mark::Tip(tip, heading) => self.tip(tip, heading),
+            Mark::Tip(tip, direction) => self.tip(tip, direction),
         }
     }
 
-    /// A tip facing a node `heading` points at: a fork opens onto it, a hollow head points at it.
-    const fn tip(self, tip: Tip, heading: Direction) -> char {
-        match (tip, heading) {
-            (Tip::Hollow, Direction::Up) => self.pick('▵', '^'),
-            (Tip::Hollow, Direction::Right) => self.pick('▹', '>'),
-            (Tip::Hollow, Direction::Down) => self.pick('▿', 'v'),
-            (Tip::Hollow, Direction::Left) => self.pick('◃', '<'),
+    /// A tip facing a node `direction` points at: a fork opens onto it, an arrow or a triangle points at it.
+    const fn tip(self, tip: Tip, direction: Direction) -> char {
+        match (tip, direction) {
+            (Tip::Arrow, _) => self.arrow(direction),
+            (Tip::Triangle, Direction::Up) => self.pick('▵', '^'),
+            (Tip::Triangle, Direction::Right) => self.pick('▹', '>'),
+            (Tip::Triangle, Direction::Down) => self.pick('▿', 'v'),
+            (Tip::Triangle, Direction::Left) => self.pick('◃', '<'),
             (Tip::Diamond, _) => self.pick('⬦', 'o'),
             (Tip::FilledDiamond, _) => self.pick('⬥', '#'),
             (Tip::Ring, _) => 'o',
@@ -82,6 +82,7 @@ impl GlyphSet {
             (Tip::Fork, Direction::Left) => '>',
             (Tip::Fork, Direction::Down) => self.pick('Ʌ', '^'),
             (Tip::Fork, Direction::Up) => self.pick('V', 'v'),
+            (Tip::Cross, _) => self.pick('╳', 'x'),
         }
     }
 
@@ -90,7 +91,7 @@ impl GlyphSet {
         self.pick('⋯', '~')
     }
 
-    pub(crate) const fn arrow(self, direction: Direction) -> char {
+    const fn arrow(self, direction: Direction) -> char {
         match direction {
             Direction::Up => self.pick('▴', '^'),
             Direction::Right => self.pick('▸', '>'),
@@ -260,15 +261,13 @@ mod tests {
             })
         });
         let lines = all_sides.flat_map(|sides| [false, true].map(|rounded| GlyphSet::Unicode.line(sides, rounded)));
-        let arrows = Direction::ALL.map(|direction| GlyphSet::Unicode.arrow(direction));
-        let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint, Mark::Cross]
+        let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint]
             .into_iter()
             .chain(Marker::ALL.map(Mark::Marker))
-            .chain(Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|heading| Mark::Tip(tip, heading))))
+            .chain(Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|direction| Mark::Tip(tip, direction))))
             .map(|mark| GlyphSet::Unicode.mark(mark));
         let fills = [GlyphSet::Unicode.fill(0)];
         lines
-            .chain(arrows)
             .chain(marks)
             .chain(fills)
             .chain([GlyphSet::Unicode.ellipsis()])

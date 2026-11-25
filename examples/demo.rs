@@ -1,6 +1,6 @@
 //! Draws a small flowchart by hand and prints it with each glyph set: `cargo run --example demo`.
 
-use vt_canvas::{Canvas, Corner, Direction, Error, Frame, GlyphSet, LineKind, Point, Rect, Role};
+use vt_canvas::{Canvas, Corner, Direction, Error, Frame, GlyphSet, LineKind, Point, Rect, Role, Tip};
 
 /// What each cell is drawn for; a real caller maps each one to a colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -69,7 +69,7 @@ fn edge(canvas: &mut Canvas<Part>, points: &[Point], kind: LineKind) -> Result<(
         } else {
             Direction::Up
         };
-        canvas.arrow(*end, direction, Part::Edge);
+        canvas.tip(*end, direction, Tip::Arrow, Part::Edge);
     }
     Ok(())
 }

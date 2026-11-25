@@ -5,7 +5,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use unicode_width::UnicodeWidthChar;
-use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, Frame, GlyphSet, LineKind, Pixel, Point, Rect, Shape, Wedge};
+use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, Frame, GlyphSet, LineKind, Pixel, Point, Rect, Shape, Tip, Wedge};
 
 /// Wide enough to reach every clipping branch, small enough to keep each run fast.
 const MAX_SIDE: u16 = 64;
@@ -27,7 +27,7 @@ enum Operation {
     Line { from: (u16, u16), to: (u16, u16), kind: u8, role: u8 },
     Path { points: Vec<(u16, u16)>, kind: u8, role: u8 },
     Frame { rect: (u16, u16, u16, u16), kind: u8, rounded: bool, title: Option<String>, role: u8 },
-    Arrow { at: (u16, u16), direction: u8, role: u8 },
+    Tip { at: (u16, u16), direction: u8, tip: u8, role: u8 },
     Shape { rect: (u16, u16, u16, u16), shape: u8, role: u8 },
     Column { x: u16, eighths: (u32, u32), role: u8 },
     Row { y: u16, eighths: (u32, u32), role: u8 },
@@ -69,7 +69,9 @@ fn apply(canvas: &mut Canvas<u8>, operation: &Operation) {
             let frame = Frame { kind: line_kind(*kind), corner, title: title.as_deref(), role: *role };
             canvas.frame(self::rect(*rect), frame);
         }
-        Operation::Arrow { at, direction, role } => canvas.arrow(point(*at), self::direction(*direction), *role),
+        Operation::Tip { at, direction, tip, role } => {
+            canvas.tip(point(*at), self::direction(*direction), Tip::ALL[usize::from(*tip) % Tip::ALL.len()], *role);
+        }
         Operation::Shape { rect, shape, role } => {
             canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], *role)
         }

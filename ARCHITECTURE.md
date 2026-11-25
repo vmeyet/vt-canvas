@@ -26,12 +26,12 @@ This page says how the code is laid out today; when a module or a boundary chang
 | `canvas` | `Canvas`, its cells and their backgrounds, `Frame`, `Run`, `Error` and the size limits |
 | `role` | `Role`: what the canvas asks of the caller's role type, its ASCII texture |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
-| `glyph` | `GlyphSet`: the character for a cell's sides, an arrow, a shape's mark or a filled cell, junction tables included |
+| `glyph` | `GlyphSet`: the character for a cell's sides, a tip, a shape's mark or a filled cell, junction tables included |
 | `block` | A cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, the cells a stretch covers, and how much of a cell a glyph covers |
 | `pixel` | `Dots`, `Pixel`: the dots of a cell and their glyph in each set, the two halves of a half-block cell, and the dots of a straight line |
 | `wedge` | `Wedge`, `Fill`: a cell filled under or over a slanted edge, its glyph in each set |
 | `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines; `Marker`, a node on one cell |
-| `tip` | `Tip`: what an edge draws where it meets a node, a class relation's head or a crow's foot's part |
+| `tip` | `Tip`: what an edge draws where it meets a node, an arrow, a cross, a class relation's head or a crow's foot's part |
 | `text` | Which characters a cell can hold and how wide they are |
 | `geometry` | `Point`, `Rect`, `Direction` |
 
@@ -139,10 +139,8 @@ A cell holding a block under half on a background shows the background's charact
 The ASCII set draws any junction as `+`, a horizontal run as `-`, `=` when heavy or double, `.` when dashed, and a vertical run as `|`, `:` when dashed.
 A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still differs from a square one.
 Slants are `/ \`; brackets and points are the same in both sets.
-Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.
-`Canvas::cross` draws `╳`, `x` in ASCII, and keeps it under a line as a shape's mark is kept.
 `Canvas::marker` draws a node too small for an outline on one cell, kept under a line the same way: `Marker::Dot` `⬤`, `Marker::RingedDot` `◉` and `Marker::Diamond` `⬥`, `*`, `@` and `?` in ASCII; `●` and `◇` would be East Asian ambiguous.
-`Canvas::tip` draws an edge's end on one cell, facing the node it goes into, kept under a line the same way: `Tip::Hollow` `▹ ◃ ▵ ▿`, `Tip::Diamond` `⬦`, `Tip::FilledDiamond` `⬥`, `Tip::Ring` `o` and `Tip::Fork` `< > Ʌ V`, opening onto the node; in ASCII `> < ^ v`, `o`, `#` (not `*`, a multiplicity), `o` and `< > ^ v`.
+`Canvas::tip` draws an edge's end on one cell, facing the node it goes into, kept under a line the same way, so an edge drawn later does not cut it: `Tip::Arrow` `▸ ◂ ▴ ▾`, `Tip::Triangle` `▹ ◃ ▵ ▿`, `Tip::Diamond` `⬦`, `Tip::FilledDiamond` `⬥`, `Tip::Ring` `o`, `Tip::Fork` `< > Ʌ V`, opening onto the node, and `Tip::Cross` `╳`; in ASCII `> < ^ v` for both triangles, `o`, `#` (not `*`, a multiplicity), `o`, `< > ^ v` and `x`.
 `Tip::Bar` is a line across the edge instead, merged with it into `┼` (`+`).
 `△ ▷ ◇ ◆ ○` would be East Asian ambiguous.
 
@@ -163,5 +161,5 @@ mrk measures text with its own helper over the same crate; vt-canvas exposes `wi
 
 ## Fuzzing and properties
 
-- `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames, arrows and shapes, then checks that every row is exactly the canvas's width.
+- `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames, tips and shapes, then checks that every row is exactly the canvas's width.
 - The proptest properties in `canvas` keep the same check in `cargo test` for every glyph set, plus a line drawn from either end, a line drawn twice, a path drawn as its lines, and a whole block covering whatever was drawn.

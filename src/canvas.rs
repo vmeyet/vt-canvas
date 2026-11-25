@@ -105,10 +105,6 @@ enum Cell<R> {
         rounded: bool,
         role: R,
     },
-    Arrow {
-        direction: Direction,
-        role: R,
-    },
     /// A cell of a shape's outline that is not a line.
     Mark {
         mark: Mark,
@@ -165,7 +161,7 @@ impl<R: Role> Cell<R> {
     }
 }
 
-/// A grid of cells to draw text, lines, frames and arrows on, read back as rows of styled runs.
+/// A grid of cells to draw text, lines, frames, shapes, tips and finer than a cell on, read back as rows of styled runs.
 ///
 /// Drawing out of bounds is clipped; the last drawing on a cell wins, except that lines merge into junctions
 /// and a block filling at least half of what a drawing leaves of its cell stays behind it, as the cell's background.
@@ -264,18 +260,6 @@ impl<R: Role> Canvas<R> {
         }
     }
 
-    /// Draws an arrow head pointing to `direction`.
-    pub fn arrow(&mut self, at: Point, direction: Direction, role: R) {
-        self.put(usize::from(at.x), usize::from(at.y), Cell::Arrow { direction, role });
-    }
-
-    /// Draws a cross, `╳` (`x` in ASCII): a crossed arrow head, or where a line is struck out.
-    ///
-    /// Like a shape's mark, a line drawn onto it later leaves it whole.
-    pub fn cross(&mut self, at: Point, role: R) {
-        self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Cross, role });
-    }
-
     /// Draws `marker` on one cell: a node too small for an outline.
     ///
     /// Like a shape's mark, a line drawn onto it later leaves it whole, so an edge starting on it keeps it.
@@ -283,16 +267,17 @@ impl<R: Role> Canvas<R> {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Marker(marker), role });
     }
 
-    /// Draws `tip` on one cell, facing the node `heading` points at.
+    /// Draws `tip` on one cell, facing the node `direction` points at: an arrow head points that way.
     ///
-    /// A bar merges with the lines through its cell into `┼`; any other tip is kept under a line, as a shape's mark is.
-    pub fn tip(&mut self, at: Point, heading: Direction, tip: Tip, role: R) {
+    /// A bar merges with the lines through its cell into `┼`; any other tip is kept under a line, as a shape's mark is,
+    /// so an edge drawn after it does not cut it.
+    pub fn tip(&mut self, at: Point, direction: Direction, tip: Tip, role: R) {
         let (x, y) = (usize::from(at.x), usize::from(at.y));
         if tip == Tip::Bar {
             let across = Direction::ALL.into_iter().fold(Sides::default(), |sides, side| sides.with(side, Some(LineKind::Light)));
             self.draw_line(x, y, across, role);
         } else {
-            self.put(x, y, Cell::Mark { mark: Mark::Tip(tip, heading), role });
+            self.put(x, y, Cell::Mark { mark: Mark::Tip(tip, direction), role });
         }
     }
 
@@ -477,7 +462,6 @@ fn styled<R: Role>(cell: Cell<R>, ground: Option<R>, glyphs: GlyphSet) -> Option
         Cell::WideTail => return None,
         Cell::Text { char, role } => (char, role),
         Cell::Line { sides, rounded, role } => (glyphs.line(sides, rounded), role),
-        Cell::Arrow { direction, role } => (glyphs.arrow(direction), role),
         Cell::Ellipsis { role } => (glyphs.ellipsis(), role),
         Cell::Mark { mark, role } => (glyphs.mark(mark), role),
         Cell::Block { block, role } => return Some(block.styled(role, ground, glyphs)),
@@ -566,7 +550,7 @@ mod tests {
 
         canvas.text(Point::new(0, 2), "below", Part::Label);
         canvas.text(Point::new(3, 0), "right", Part::Label);
-        canvas.arrow(Point::new(u16::MAX, u16::MAX), Direction::Up, Part::Edge);
+        canvas.tip(Point::new(u16::MAX, u16::MAX), Direction::Up, Tip::Arrow, Part::Edge);
         line(&mut canvas, (5, 0), (5, 9), LineKind::Light);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   \n   ");
@@ -615,7 +599,7 @@ mod tests {
         let mut canvas = canvas(4, 1);
         canvas.text(Point::new(1, 0), "漢", Part::Label);
 
-        canvas.arrow(Point::new(2, 0), Direction::Left, Part::Edge);
+        canvas.tip(Point::new(2, 0), Direction::Left, Tip::Arrow, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "  ◂ ");
     }
@@ -641,10 +625,9 @@ mod tests {
     }
 
     #[test]
-    fn a_line_replaces_text_and_arrows() {
+    fn a_line_replaces_text() {
         let mut canvas = canvas(4, 1);
         canvas.text(Point::new(0, 0), "ab", Part::Label);
-        canvas.arrow(Point::new(3, 0), Direction::Right, Part::Edge);
 
         line(&mut canvas, (1, 0), (3, 0), LineKind::Double);
 
@@ -652,9 +635,19 @@ mod tests {
     }
 
     #[test]
+    fn an_arrow_stays_whole_under_a_line_drawn_after_it() {
+        let mut canvas = canvas(4, 1);
+        canvas.tip(Point::new(3, 0), Direction::Right, Tip::Arrow, Part::Edge);
+
+        line(&mut canvas, (0, 0), (3, 0), LineKind::Light);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "───▸");
+    }
+
+    #[test]
     fn a_cross_ends_a_line_and_stays_whole_under_another() {
         let mut canvas = canvas(4, 1);
-        canvas.cross(Point::new(3, 0), Part::Edge);
+        canvas.tip(Point::new(3, 0), Direction::Right, Tip::Cross, Part::Edge);
 
         line(&mut canvas, (0, 0), (3, 0), LineKind::Light);
 
@@ -669,13 +662,13 @@ mod tests {
         let tips = [
             (0, Direction::Left, Tip::Fork),
             (1, Direction::Left, Tip::Bar),
-            (2, Direction::Left, Tip::Hollow),
+            (2, Direction::Left, Tip::Triangle),
             (3, Direction::Up, Tip::Diamond),
         ];
         let more = [(4, Direction::Down, Tip::FilledDiamond), (5, Direction::Right, Tip::Ring), (6, Direction::Right, Tip::Fork)];
 
-        for (x, heading, tip) in tips.into_iter().chain(more) {
-            canvas.tip(Point::new(x, 1), heading, tip, Part::Edge);
+        for (x, direction, tip) in tips.into_iter().chain(more) {
+            canvas.tip(Point::new(x, 1), direction, tip, Part::Edge);
         }
         canvas.tip(Point::new(7, 0), Direction::Down, Tip::Fork, Part::Edge);
         canvas.tip(Point::new(7, 2), Direction::Up, Tip::Fork, Part::Edge);
@@ -873,7 +866,7 @@ mod tests {
         line(&mut canvas, (3, 1), (8, 1), LineKind::Dashed);
         line(&mut canvas, (6, 0), (6, 2), LineKind::Heavy);
 
-        canvas.arrow(Point::new(8, 1), Direction::Right, Part::Edge);
+        canvas.tip(Point::new(8, 1), Direction::Right, Tip::Arrow, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Ascii), ".--.  |  \n|  +..+.>\n'--'  |  ");
     }

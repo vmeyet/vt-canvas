@@ -64,8 +64,6 @@ pub(crate) enum Mark {
     LeftPoint,
     /// `>`
     RightPoint,
-    /// `╳`, `x` in ASCII: a crossed end, drawn alone by [`Canvas::cross`](crate::Canvas::cross).
-    Cross,
     /// A one-cell figure, drawn alone by [`Canvas::marker`](crate::Canvas::marker).
     Marker(Marker),
     /// An edge's end facing a node the way the edge goes, drawn by [`Canvas::tip`](crate::Canvas::tip).
@@ -204,11 +202,10 @@ impl Mark {
             Self::RightArc => Self::LeftArc,
             Self::LeftPoint => Self::RightPoint,
             Self::RightPoint => Self::LeftPoint,
-            Self::Cross => Self::Cross,
             Self::Marker(marker) => Self::Marker(marker),
             Self::Tip(tip, Direction::Left) => Self::Tip(tip, Direction::Right),
             Self::Tip(tip, Direction::Right) => Self::Tip(tip, Direction::Left),
-            Self::Tip(tip, heading) => Self::Tip(tip, heading),
+            Self::Tip(tip, direction) => Self::Tip(tip, direction),
         }
     }
 }
@@ -341,7 +338,7 @@ mod tests {
         canvas.shape(Rect::new(3, 0, 5, 3), Shape::Hexagon, Part::Node);
 
         canvas.line(Point::new(0, 1), Point::new(3, 1), LineKind::Light, Part::Edge).unwrap();
-        canvas.arrow(Point::new(2, 1), Direction::Right, Part::Edge);
+        canvas.tip(Point::new(2, 1), Direction::Right, Tip::Arrow, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   ╱───╲\n──▸<   >\n   ╲───╱");
     }
