@@ -1,7 +1,7 @@
 //! How long a canvas at the cell limit takes to fill and read back: `cargo bench --bench canvas`.
 
 use divan::{Bencher, black_box};
-use vt_canvas::{Canvas, Error, GlyphSet, LineKind, MAX_CELLS, MAX_WIDTH, Point, Role};
+use vt_canvas::{Canvas, Dots, Error, GlyphSet, LineKind, MAX_CELLS, MAX_WIDTH, Pixel, Point, Role};
 
 const HEIGHT: u16 = (MAX_CELLS / MAX_WIDTH as usize) as u16;
 
@@ -44,4 +44,31 @@ fn text_at_the_cell_limit_drawn() -> Result<Canvas, Error> {
         canvas.text(Point::new(0, y), black_box(&row), Role::Label);
     }
     Ok(canvas)
+}
+
+/// A bar in every column, each a different height, then a line of dots across every row: every cell is drawn twice.
+fn bars_under_dots() -> Result<Canvas, Error> {
+    let mut canvas = Canvas::new(MAX_WIDTH, HEIGHT)?;
+    let bottom = u32::from(HEIGHT) * 8;
+    for x in 0..MAX_WIDTH {
+        canvas.column(x, u32::from(x) * 7 % bottom..bottom, Role::Series(0));
+    }
+    let right = u32::from(MAX_WIDTH) * Dots::Octant.across() - 1;
+    for y in 0..u32::from(HEIGHT) {
+        let rise = y * Dots::Octant.down();
+        canvas.segment(Pixel::new(0, rise), Pixel::new(right, rise + 3), Dots::Octant, Role::Series(1));
+    }
+    Ok(canvas)
+}
+
+#[divan::bench]
+fn bars_under_dots_at_the_cell_limit_drawn() -> Result<Canvas, Error> {
+    bars_under_dots()
+}
+
+#[divan::bench]
+fn bars_under_dots_at_the_cell_limit_read(bencher: Bencher<'_, '_>) {
+    bencher
+        .with_inputs(bars_under_dots)
+        .bench_refs(|canvas| canvas.as_ref().map(|canvas| canvas.rows(GlyphSet::Unicode).map(|runs| runs.len()).sum::<usize>()).ok());
 }

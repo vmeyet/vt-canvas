@@ -529,6 +529,12 @@ mod tests {
         u16::try_from(MAX_CELLS / usize::from(MAX_WIDTH)).unwrap()
     }
 
+    /// The memory `ARCHITECTURE.md` states for a canvas at the cell limit.
+    #[test]
+    fn a_cell_and_its_background_take_ten_bytes() {
+        assert_eq!((size_of::<Cell>(), size_of::<Option<Role>>()), (8, 2));
+    }
+
     #[test]
     fn a_canvas_at_the_cell_limit_is_accepted() {
         let canvas = canvas(MAX_WIDTH, tallest_full_width());
@@ -1138,8 +1144,44 @@ mod tests {
             })
         }
 
-        fn rows(canvas: &Canvas) -> Vec<String> {
-            canvas.rows(GlyphSet::Unicode).map(|runs| runs.into_iter().map(|run| run.text).collect()).collect()
+        fn dots() -> impl Strategy<Value = Dots> {
+            prop_oneof![Just(Dots::Braille), Just(Dots::Octant), Just(Dots::Sextant), Just(Dots::Quadrant), Just(Dots::HalfBlock)]
+        }
+
+        /// Dots and eighths reach past the canvas too, as far as `u32::MAX`.
+        fn fine() -> impl Strategy<Value = u32> {
+            prop_oneof![9 => 0..u32::from(REACH) * 8, 1 => Just(u32::MAX)]
+        }
+
+        #[derive(Debug, Clone)]
+        enum Fine {
+            Column(u16, Range<u32>),
+            Row(u16, Range<u32>),
+            Stroke(u16, u32),
+            Wedge(Point, Wedge),
+            Segment(Pixel, Pixel, Dots),
+        }
+
+        fn finer_than_a_cell() -> impl Strategy<Value = Fine> {
+            let fill = prop_oneof![Just(Fill::Below), Just(Fill::Above)];
+            let pixel = || (fine(), fine()).prop_map(|(x, y)| Pixel::new(x, y));
+            prop_oneof![
+                (0..REACH, fine(), fine()).prop_map(|(x, from, to)| Fine::Column(x, from..to)),
+                (0..REACH, fine(), fine()).prop_map(|(y, from, to)| Fine::Row(y, from..to)),
+                (0..REACH, fine()).prop_map(|(x, eighth)| Fine::Stroke(x, eighth)),
+                (point(), 0..5u8, 0..5u8, fill).prop_map(|(at, left, right, fill)| Fine::Wedge(at, Wedge { left, right, fill })),
+                (pixel(), pixel(), dots()).prop_map(|(from, to, dots)| Fine::Segment(from, to, dots)),
+            ]
+        }
+
+        fn draw(canvas: &mut Canvas, fine: Fine, role: Role) {
+            match fine {
+                Fine::Column(x, eighths) => canvas.column(x, eighths, role),
+                Fine::Row(y, eighths) => canvas.row(y, eighths, role),
+                Fine::Stroke(x, eighth) => canvas.stroke(x, eighth, role),
+                Fine::Wedge(at, wedge) => canvas.wedge(at, wedge, role),
+                Fine::Segment(from, to, dots) => canvas.segment(from, to, dots, role),
+            }
         }
 
         proptest! {
@@ -1149,8 +1191,13 @@ mod tests {
                 texts in prop::collection::vec((point(), "[a漢\u{301}\u{200b}\t\u{1b} ]{0,8}", 0..12u16), 0..6),
                 lines in prop::collection::vec((straight(), kind()), 0..6),
                 frames in prop::collection::vec((point(), point(), "[b漢 ]{0,6}"), 0..3),
+                fines in prop::collection::vec((finer_than_a_cell(), 0..3u8), 0..8),
+                glyphs in prop_oneof![Just(GlyphSet::Unicode), Just(GlyphSet::Unicode13), Just(GlyphSet::Unicode3), Just(GlyphSet::Ascii)],
             ) {
                 let mut canvas = canvas(width, height);
+                for (fine, series) in fines.iter().take(4).cloned() {
+                    draw(&mut canvas, fine, Role::Series(series));
+                }
                 for ((from, to), kind) in lines {
                     canvas.line(from, to, kind, Role::Edge).unwrap();
                 }
@@ -1160,11 +1207,29 @@ mod tests {
                 for (at, text, max_width) in &texts {
                     canvas.text_cut(*at, text, *max_width, Role::Label);
                 }
+                for (fine, series) in fines.into_iter().skip(4) {
+                    draw(&mut canvas, fine, Role::Series(series));
+                }
 
-                for row in rows(&canvas) {
+                for row in canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect::<String>()) {
                     let columns: usize = row.chars().map(|char| char.width().unwrap_or(0)).sum();
                     prop_assert_eq!(columns, usize::from(width), "row {:?}", row);
                 }
+            }
+
+            #[test]
+            fn a_whole_block_covers_whatever_was_drawn(fines in prop::collection::vec(finer_than_a_cell(), 0..8), text in "[a漢 ]{0,8}") {
+                let mut canvas = canvas(8, 2);
+                canvas.text(Point::new(0, 0), &text, Role::Label);
+                for fine in fines {
+                    draw(&mut canvas, fine, Role::Series(1));
+                }
+
+                canvas.row(0, 0..64, Role::Series(0));
+                canvas.row(1, 0..64, Role::Series(0));
+
+                let whole = || vec![Run { text: "█".repeat(8), role: Role::Series(0), background: None }];
+                prop_assert_eq!(canvas.rows(GlyphSet::Unicode).collect::<Vec<_>>(), [whole(), whole()]);
             }
 
             #[test]

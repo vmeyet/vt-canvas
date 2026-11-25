@@ -48,7 +48,8 @@ This page says how the code is laid out today; when a module or a boundary chang
 - Roles: `Plain`, `Node`, `Edge`, `Label`, `Group`, `Axis` and `Series(n)`, a chart's series counted from 0; the caller maps each one to a colour.
 - Output: `rows` yields each row as runs of text sharing a role and a background, without `\n`.
   A run's `background` is the role behind its characters, `None` where nothing is.
-- Cost at the cell limit, measured on an Apple M5 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 5 ms and reads back in 15 ms, in about 9 MB.
+- Cost at the cell limit, measured on an Apple M5 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 4 ms and reads back in 8 ms; a bar in every column under a line of octant dots across every row draws in 17 ms and reads back in 5 ms.
+  A cell takes 8 bytes and its background 2, so the canvas holds 10 MB.
 
 ## Finer than a cell
 
@@ -159,4 +160,4 @@ mrk measures text with its own helper over the same crate; vt-canvas exposes `wi
 ## Fuzzing and properties
 
 - `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames, arrows and shapes, then checks that every row is exactly the canvas's width.
-- The proptest properties in `canvas` keep the same check in `cargo test`, plus a line drawn from either end, a line drawn twice, and a path drawn as its lines.
+- The proptest properties in `canvas` keep the same check in `cargo test` for every glyph set, plus a line drawn from either end, a line drawn twice, a path drawn as its lines, and a whole block covering whatever was drawn.

@@ -1,11 +1,11 @@
-//! Arbitrary drawing operations on a canvas, then every row read back must be exactly the canvas's width.
+//! Arbitrary drawing operations on a canvas, then every row read back in every glyph set must be exactly the canvas's width.
 
 #![no_main]
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use unicode_width::UnicodeWidthChar;
-use vt_canvas::{Canvas, Corner, Direction, Frame, GlyphSet, LineKind, Point, Rect, Role, Shape};
+use vt_canvas::{Canvas, Corner, Direction, Dots, Fill, Frame, GlyphSet, LineKind, Pixel, Point, Rect, Role, Shape, Wedge};
 
 /// Wide enough to reach every clipping branch, small enough to keep each run fast.
 const MAX_SIDE: u16 = 64;
@@ -29,6 +29,11 @@ enum Operation {
     Frame { rect: (u16, u16, u16, u16), kind: u8, rounded: bool, title: Option<String>, role: u8 },
     Arrow { at: (u16, u16), direction: u8, role: u8 },
     Shape { rect: (u16, u16, u16, u16), shape: u8, role: u8 },
+    Column { x: u16, eighths: (u32, u32), role: u8 },
+    Row { y: u16, eighths: (u32, u32), role: u8 },
+    Stroke { x: u16, eighth: u32, role: u8 },
+    Wedge { at: (u16, u16), left: u8, right: u8, above: bool, role: u8 },
+    Segment { from: (u32, u32), to: (u32, u32), dots: u8, role: u8 },
 }
 
 fuzz_target!(|drawing: Drawing| {
@@ -36,7 +41,7 @@ fuzz_target!(|drawing: Drawing| {
     for operation in &drawing.operations {
         apply(&mut canvas, operation);
     }
-    for glyphs in [GlyphSet::Unicode, GlyphSet::Ascii] {
+    for glyphs in [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii] {
         for row in canvas.rows(glyphs) {
             let text: String = row.into_iter().map(|run| run.text).collect();
             let columns: usize = text.chars().map(|char| char.width().filter(|&width| width > 0).unwrap_or(usize::MAX / 4)).sum();
@@ -68,6 +73,17 @@ fn apply(canvas: &mut Canvas, operation: &Operation) {
         Operation::Shape { rect, shape, role } => {
             canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], self::role(*role))
         }
+        Operation::Column { x, eighths, role } => canvas.column(coordinate(*x), fine(eighths.0)..fine(eighths.1), self::role(*role)),
+        Operation::Row { y, eighths, role } => canvas.row(coordinate(*y), fine(eighths.0)..fine(eighths.1), self::role(*role)),
+        Operation::Stroke { x, eighth, role } => canvas.stroke(coordinate(*x), fine(*eighth), self::role(*role)),
+        Operation::Wedge { at, left, right, above, role } => {
+            let fill = if *above { Fill::Above } else { Fill::Below };
+            canvas.wedge(point(*at), Wedge { left: *left, right: *right, fill }, self::role(*role));
+        }
+        Operation::Segment { from, to, dots, role } => {
+            let (from, to) = (Pixel::new(fine(from.0), fine(from.1)), Pixel::new(fine(to.0), fine(to.1)));
+            canvas.segment(from, to, self::dots(*dots), self::role(*role));
+        }
     }
 }
 
@@ -83,8 +99,17 @@ fn coordinate(value: u16) -> u16 {
     if value > u16::MAX - FAR { value } else { value % FAR }
 }
 
+/// Dots and eighths past `FAR` cells are folded back too, but for the last ones before `u32::MAX`.
+fn fine(value: u32) -> u32 {
+    if value > u32::MAX - u32::from(FAR) { value } else { value % (u32::from(FAR) * 8) }
+}
+
 fn role(byte: u8) -> Role {
-    [Role::Plain, Role::Node, Role::Edge, Role::Label, Role::Group][usize::from(byte) % 5]
+    [Role::Plain, Role::Node, Role::Edge, Role::Label, Role::Group, Role::Axis, Role::Series(byte)][usize::from(byte) % 7]
+}
+
+fn dots(byte: u8) -> Dots {
+    [Dots::Braille, Dots::Octant, Dots::Sextant, Dots::Quadrant, Dots::HalfBlock][usize::from(byte) % 5]
 }
 
 fn line_kind(byte: u8) -> LineKind {
