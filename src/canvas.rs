@@ -495,7 +495,7 @@ fn styled(cell: Cell, ground: Option<Role>, glyphs: GlyphSet) -> Option<Styled> 
         Cell::Block { block, role } => return Some(block.styled(role, ground, glyphs)),
         Cell::Wedge { wedge, role } => return Some(wedge.styled(role, ground, glyphs)),
         Cell::Stroke { stroke, role } => (stroke.glyph(glyphs), role),
-        Cell::Dots { dots, lit, role } => (dots.glyph(lit, glyphs), role),
+        Cell::Dots { dots, lit, role } => (dots.glyph(lit, role, glyphs), role),
         Cell::Halves(halves) => return Some(halves.styled(ground, glyphs)),
     };
     Some(Styled { char, role, background: ground })

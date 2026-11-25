@@ -19,7 +19,7 @@ pub enum GlyphSet {
     /// Box drawing (`─ ┼ ╭ ┿ ╬ ╱ ╲`), the small triangles `▴ ▸ ▾ ◂`, block elements (`▁ ▌ ▚ █`) and braille:
     /// what nearly every monospace font holds.
     Unicode3,
-    /// `- | + = . : ' / \ ( ) ^ > v < # _ "`, for terminals and files that only take ASCII.
+    /// `- | + = . : ' , ; " / \ ( ) ^ > v < # % * o @ x _`, for terminals and files that only take ASCII.
     Ascii,
 }
 

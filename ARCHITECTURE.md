@@ -70,7 +70,7 @@ Legacy Computing has no edge from a bottom corner to the opposite top corner: `�
 | `Braille` | 2 by 4 | `⠉ ⡠ ⣿` | `Quadrant` in ASCII |
 | `Octant` | 2 by 4 | U+1CD00… (Unicode 16) | `Sextant` in `Unicode13`, `Quadrant` in `Unicode3` and ASCII |
 | `Sextant` | 2 by 3 | U+1FB00… (Unicode 13) | `Quadrant` in `Unicode3` and ASCII |
-| `Quadrant` | 2 by 2 | `▘ ▚ ▟` | `'` for the upper dots, `.` for the lower, `:` for both in ASCII |
+| `Quadrant` | 2 by 2 | `▘ ▚ ▟` | `'` for the upper dots, `.` for the lower, `:` for both in ASCII; `" , ;` for series 1, 3, 5…, so two lines differ without colour |
 | `HalfBlock` | 1 by 2 | `▀ ▄ █` | `'`, `.` and the role's filled cell in ASCII |
 
 A coarser grid lights the dot nearest each dot: of an octant's four rows the two in the middle share a sextant's middle row, and the upper two and lower two share a quadrant's rows; a sextant's middle row joins a quadrant's lower row, so a level line stays one dot thick.

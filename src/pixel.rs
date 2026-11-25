@@ -28,7 +28,7 @@ pub enum Dots {
     Octant,
     /// 2 by 3 square dots, Unicode 13; a set without them draws [`Quadrant`](Self::Quadrant).
     Sextant,
-    /// 2 by 2 square dots, `▘ ▚ ▟`; ASCII draws `'` for the upper two, `.` for the lower two and `:` for both.
+    /// 2 by 2 square dots, `▘ ▚ ▟`; ASCII draws `'` for the upper two, `.` for the lower two and `:` for both, and `" , ;` for every other series.
     Quadrant,
     /// 1 by 2 dots, `▀ ▄ █`, the upper one drawn on the lower one's role: the one kind with two roles in a cell.
     HalfBlock,
@@ -58,19 +58,19 @@ impl Dots {
     }
 
     /// The glyph for the dots `lit` in a cell, or the closest one `glyphs` holds.
-    pub(crate) fn glyph(self, lit: u8, glyphs: GlyphSet) -> char {
+    pub(crate) fn glyph(self, lit: u8, role: Role, glyphs: GlyphSet) -> char {
         match (self, glyphs) {
             (_, _) if lit == 0 => ' ',
-            (Self::Braille, GlyphSet::Ascii) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), glyphs),
+            (Self::Braille, GlyphSet::Ascii) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), role, glyphs),
             (Self::Braille, _) => braille(lit),
             (Self::Octant, GlyphSet::Unicode) => octant(lit),
             (Self::Octant, GlyphSet::Unicode13) => sextant(regrid(lit, &[0, 1, 1, 2])),
-            (Self::Octant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), glyphs),
+            (Self::Octant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 0, 1, 1]), role, glyphs),
             (Self::Sextant, GlyphSet::Unicode | GlyphSet::Unicode13) => sextant(lit),
-            (Self::Sextant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 1, 1]), glyphs),
-            (Self::Quadrant, GlyphSet::Ascii) => ascii(lit),
+            (Self::Sextant, _) => Self::Quadrant.glyph(regrid(lit, &[0, 1, 1]), role, glyphs),
+            (Self::Quadrant, GlyphSet::Ascii) => ascii(lit, role),
             (Self::Quadrant, _) => QUADRANTS[usize::from(lit & 0b1111)],
-            (Self::HalfBlock, _) => Self::Quadrant.glyph([0b0000, 0b0011, 0b1100, 0b1111][usize::from(lit & 0b11)], glyphs),
+            (Self::HalfBlock, _) => Self::Quadrant.glyph([0b0000, 0b0011, 0b1100, 0b1111][usize::from(lit & 0b11)], role, glyphs),
         }
     }
 }
@@ -141,12 +141,17 @@ fn braille(lit: u8) -> char {
     char::from_u32(0x2800 + pattern).unwrap_or(' ')
 }
 
-const fn ascii(quadrants: u8) -> char {
+/// The upper dots, the lower dots and both; every other series has the second three, so two lines differ without colour.
+const fn ascii(quadrants: u8, role: Role) -> char {
+    let [upper, lower, both] = match role {
+        Role::Series(series) if series % 2 == 1 => ['"', ',', ';'],
+        _ => ['\'', '.', ':'],
+    };
     match (quadrants & 0b0011 != 0, quadrants & 0b1100 != 0) {
         (false, false) => ' ',
-        (true, false) => '\'',
-        (false, true) => '.',
-        (true, true) => ':',
+        (true, false) => upper,
+        (false, true) => lower,
+        (true, true) => both,
     }
 }
 
@@ -215,7 +220,7 @@ pub(crate) mod tests {
     const SETS: [GlyphSet; 4] = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
 
     pub(crate) fn every_glyph() -> Vec<char> {
-        ALL_DOTS.into_iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, GlyphSet::Unicode))).collect()
+        ALL_DOTS.into_iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, Role::Plain, GlyphSet::Unicode))).collect()
     }
 
     /// A ring and a line through it, so every slope and every dot of a cell is used.
@@ -271,7 +276,8 @@ pub(crate) mod tests {
     #[test]
     fn every_pattern_of_dots_has_a_glyph_of_its_own() {
         for (dots, patterns) in [(Dots::Braille, 256), (Dots::Octant, 256), (Dots::Sextant, 64), (Dots::Quadrant, 16)] {
-            let glyphs: std::collections::BTreeSet<char> = (0..patterns).map(|lit| dots.glyph(lit as u8, GlyphSet::Unicode)).collect();
+            let glyphs: std::collections::BTreeSet<char> =
+                (0..patterns).map(|lit| dots.glyph(lit as u8, Role::Plain, GlyphSet::Unicode)).collect();
 
             assert_eq!(glyphs.len(), patterns, "{dots:?}");
         }
@@ -296,10 +302,17 @@ pub(crate) mod tests {
     fn a_coarser_grid_lights_the_dot_nearest_each_dot() {
         let top_left_and_bottom_right = 0b1000_0001;
 
-        let drawn =
-            [GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii].map(|glyphs| Dots::Octant.glyph(top_left_and_bottom_right, glyphs));
+        let drawn = [GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii]
+            .map(|glyphs| Dots::Octant.glyph(top_left_and_bottom_right, Role::Plain, glyphs));
 
         assert_eq!(drawn, ['\u{1FB1F}', '▚', ':']);
+    }
+
+    #[test]
+    fn ascii_draws_every_other_series_with_dots_of_its_own() {
+        let drawn = |series| [0b0001, 0b1000, 0b1001].map(|dots| Dots::Quadrant.glyph(dots, Role::Series(series), GlyphSet::Ascii));
+
+        assert_eq!([drawn(0), drawn(1), drawn(2)], [['\'', '.', ':'], ['"', ',', ';'], ['\'', '.', ':']]);
     }
 
     #[test]
