@@ -1,0 +1,26 @@
+[package]
+name = "vt-canvas-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# Its own workspace, so the library's build, tests and scripts/check never see it.
+[workspace]
+members = ["."]
+
+[dependencies]
+arbitrary = { version = "1.4.2", features = ["derive"] }
+libfuzzer-sys = "0.4.10"
+# Measures each drawn character independently of vt-canvas, so the width check does not trust the code it checks.
+unicode-width = "0.2.3"
+vt-canvas = { path = ".." }
+
+[[bin]]
+name = "draw"
+path = "fuzz_targets/draw.rs"
+test = false
+doc = false
+bench = false
