@@ -258,7 +258,10 @@ impl Canvas {
     }
 
     /// Writes `text` from column `x` up to column `end`, excluded, and returns the column after the last character.
+    ///
+    /// `end` stops at the right edge, so a wide character on the last column is left out rather than drawn without its right half.
     fn write(&mut self, x: usize, y: usize, text: &str, role: Role, end: usize) -> usize {
+        let end = end.min(self.width);
         let mut x = x;
         for glyph in text::glyphs(text) {
             if x + glyph.width > end {
@@ -535,6 +538,15 @@ mod tests {
     }
 
     #[test]
+    fn text_cut_wider_than_the_canvas_leaves_out_a_wide_character_on_the_last_column() {
+        let mut canvas = canvas(3, 1);
+
+        canvas.text_cut(Point::new(2, 0), "漢", 5, Role::Label);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "   ");
+    }
+
+    #[test]
     fn a_path_turns_a_corner_at_each_inner_point() {
         let mut canvas = canvas(4, 3);
         let points = [Point::new(0, 0), Point::new(3, 0), Point::new(3, 2), Point::new(1, 2)];
@@ -626,6 +638,15 @@ mod tests {
         canvas.frame(Rect::new(0, 0, 6, 2), Frame { title: Some("Group"), ..NODE });
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "┌────┐\n└────┘");
+    }
+
+    #[test]
+    fn a_frame_title_past_the_canvas_leaves_out_a_wide_character_on_the_last_column() {
+        let mut canvas = canvas(7, 1);
+
+        canvas.frame(Rect::new(0, 0, 20, 3), Frame { title: Some("abc漢"), ..NODE });
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "┌─ abc ");
     }
 
     #[test]
