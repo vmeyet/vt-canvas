@@ -1,5 +1,5 @@
 ---
-source: src/canvas.rs
+source: src/canvas/lines.rs
 expression: "render(&canvas, GlyphSet::Unicode)"
 ---
 ╭──╮┏━━┓╔══╗╭╌╌╮│

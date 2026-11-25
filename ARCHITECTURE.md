@@ -24,6 +24,8 @@ This page says how the code is laid out today; when a module or a boundary chang
 | Module | Holds |
 |---|---|
 | `canvas` | `Canvas`, its cells and their backgrounds, `Run`, `Error` and the size limits |
+| `canvas/lines` | Lines, paths, frames, shapes, tips and symbols on the canvas, merged into junctions |
+| `canvas/fine` | Blocks, strokes, wedges and dots on the canvas, and the backgrounds they leave |
 | `frame` | `Corner`: the corners of a frame |
 | `role` | `Role`: what the canvas asks of the caller's role type, its ASCII texture |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
@@ -169,4 +171,4 @@ vt-canvas exposes `text_width` so its callers measure text the way it draws it.
 ## Fuzzing and properties
 
 - `fuzz/` is a cargo-fuzz crate, its own workspace, out of the library's build and of `scripts/check`: `cargo +nightly fuzz run draw` draws arbitrary text, lines, paths, frames, shapes, tips, symbols and drawings finer than a cell, then checks that every row is exactly the canvas's width.
-- The proptest properties in `canvas` keep the same check in `cargo test` for every glyph set and every kind of drawing, plus a line drawn from either end, a line drawn twice, a path drawn as its lines, a tip or a symbol kept under the lines drawn after it, and a whole block covering whatever was drawn.
+- The proptest properties in `canvas/mod.rs` keep the same check in `cargo test` for every glyph set and every kind of drawing, plus a line drawn from either end, a line drawn twice, a path drawn as its lines, a tip or a symbol kept under the lines drawn after it, and a whole block covering whatever was drawn.
