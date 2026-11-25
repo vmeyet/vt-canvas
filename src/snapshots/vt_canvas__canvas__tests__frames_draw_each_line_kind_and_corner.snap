@@ -1,0 +1,7 @@
+---
+source: src/canvas.rs
+expression: "render(&canvas, GlyphSet::Unicode)"
+---
+╭──╮┏━━┓╔══╗╭╌╌╮│
+│  │┃  ┃║  ║╎  ╎│
+╰──╯┗━━┛╚══╝╰╌╌╯│

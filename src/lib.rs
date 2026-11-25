@@ -1,1 +1,13 @@
-//! A terminal cell grid: text, lines and boxes with junction merging, glyph sets; returns styled cells, never ANSI.
+#![doc = include_str!("../README.md")]
+
+mod canvas;
+mod geometry;
+mod glyph;
+mod line;
+mod text;
+
+pub use canvas::{Canvas, Corner, Error, Frame, MAX_HEIGHT, MAX_WIDTH, Role, Run};
+pub use geometry::{Direction, Point, Rect};
+pub use glyph::GlyphSet;
+pub use line::LineKind;
+pub use text::width;
