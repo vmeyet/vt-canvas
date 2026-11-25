@@ -198,7 +198,7 @@ impl Shape {
     /// The marks replacing border cells, with a double circle's second bracket.
     pub(crate) fn marks(self, border: Border) -> Vec<Placed> {
         let outline = self.outline();
-        let second = matches!(outline.inner, Inner::SecondBrackets) && border.width > 2;
+        let second = matches!(outline.inner, Inner::SecondBrackets) && border.width > 3;
         (0..border.height)
             .flat_map(|row| {
                 let y = border.top.saturating_add(row);
@@ -384,6 +384,24 @@ mod tests {
         canvas.shape(Rect::new(0, 0, 2, 0), Shape::DoubleCircle, Part::Node);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "  \n  ");
+    }
+
+    /// Each shape 1 to 4 columns wide and 3 rows tall, then 5 columns wide and 1 and 2 rows tall: every outline keeps one glyph per cell.
+    #[test]
+    fn narrow_and_flat_shapes_keep_one_glyph_per_cell() {
+        let sizes = [(1, 3), (2, 3), (3, 3), (4, 3), (5, 1), (5, 2)];
+        let drawn: Vec<String> = Shape::ALL
+            .iter()
+            .map(|&shape| {
+                let mut canvas = Canvas::<Part>::new(26, 3).unwrap();
+                for ((width, height), x) in sizes.into_iter().zip([0, 2, 5, 9, 14, 20]) {
+                    canvas.shape(Rect::new(x, 0, width, height), shape, Part::Node);
+                }
+                format!("{shape:?}\n{}", render(&canvas, GlyphSet::Unicode))
+            })
+            .collect();
+
+        insta::assert_snapshot!(drawn.join("\n\n"));
     }
 
     #[test]

@@ -179,8 +179,11 @@ impl<R: Role> Canvas<R> {
     }
 
     /// Writes `text` like [`text`](Self::text), cut to `max_width` columns, its last column an ellipsis when cut.
+    ///
+    /// The right edge of the canvas cuts it the same way, so text running off the canvas still ends on an ellipsis.
     pub fn text_cut(&mut self, at: Point, text: &str, max_width: u16, role: R) {
-        let (x, y, max_width) = (usize::from(at.x), usize::from(at.y), usize::from(max_width));
+        let (x, y) = (usize::from(at.x), usize::from(at.y));
+        let max_width = usize::from(max_width).min(self.width.saturating_sub(x));
         if text::text_width(text) <= max_width {
             self.write(x, y, text, role, x + max_width);
         } else if max_width > 0 {
@@ -242,13 +245,13 @@ impl<R: Role> Canvas<R> {
 
     /// Draws `tip` on one cell, facing the node `direction` points at: an arrow head points that way.
     ///
-    /// A bar merges with the lines through its cell into `┼`; any other tip is kept under a line, as a shape's mark is,
+    /// A bar merges with the lines through its cell into `┼`, in the kind of the line it crosses; any other tip is kept under a line, as a shape's mark is,
     /// so an edge drawn after it does not cut it.
     pub fn tip(&mut self, at: Point, direction: Direction, tip: Tip, role: R) {
         let (x, y) = (usize::from(at.x), usize::from(at.y));
         if tip == Tip::Bar {
-            let across = Direction::ALL.into_iter().fold(Sides::default(), |sides, side| sides.with(side, Some(LineKind::Light)));
-            self.draw_line(x, y, across, role);
+            let kind = self.line_along(x, y, direction).unwrap_or(LineKind::Light);
+            self.draw_line(x, y, Sides::every(kind), role);
         } else {
             self.put(x, y, Cell::Tip { tip, direction, role });
         }
@@ -319,10 +322,8 @@ impl<R: Role> Canvas<R> {
         for (index, from) in corners.into_iter().enumerate() {
             self.straight(from, corners[(index + 1) % corners.len()], kind, role);
         }
-        if corner == Corner::Rounded {
-            for corner in corners {
-                self.round(corner);
-            }
+        for at in corners {
+            self.set_corner(at, corner);
         }
     }
 
@@ -360,10 +361,16 @@ impl<R: Role> Canvas<R> {
     }
 
     /// A line with both ends on one cell leaves it through no side, so it draws nothing.
+    ///
+    /// A junction keeps the role of a line running through it that the new line only ends on, so a node's border
+    /// stays whole where an edge joins it; otherwise it takes the new line's role.
     fn draw_line(&mut self, x: usize, y: usize, sides: Sides, role: R) {
         let Some(index) = self.index(x, y).filter(|_| sides.count() > 0) else { return };
         match self.cells[index] {
-            Cell::Line { sides: below, rounded, .. } => self.cells[index] = Cell::Line { sides: below.merge(sides), rounded, role },
+            Cell::Line { sides: below, rounded, role: below_role } => {
+                let role = if below.runs_through() && !sides.runs_through() { below_role } else { role };
+                self.cells[index] = Cell::Line { sides: below.merge(sides), rounded, role };
+            }
             Cell::Mark { .. } | Cell::Tip { .. } | Cell::Symbol { .. } => {}
             _ => self.put(x, y, Cell::Line { sides, rounded: false, role }),
         }
@@ -377,11 +384,20 @@ impl<R: Role> Canvas<R> {
         self.cells[index] = Cell::Halves(halves);
     }
 
-    fn round(&mut self, at: Point) {
+    /// The kind of the line through the cell along `direction`'s axis.
+    fn line_along(&self, x: usize, y: usize, direction: Direction) -> Option<LineKind> {
+        match self.index(x, y).map(|index| self.cells[index]) {
+            Some(Cell::Line { sides, .. }) => sides.get(direction).or(sides.get(direction.opposite())),
+            _ => None,
+        }
+    }
+
+    /// The last frame drawn on a corner sets whether it is rounded.
+    fn set_corner(&mut self, at: Point, corner: Corner) {
         if let Some(index) = self.index(usize::from(at.x), usize::from(at.y))
             && let Cell::Line { sides, role, .. } = self.cells[index]
         {
-            self.cells[index] = Cell::Line { sides, rounded: true, role };
+            self.cells[index] = Cell::Line { sides, rounded: corner == Corner::Rounded, role };
         }
     }
 
@@ -671,6 +687,48 @@ mod tests {
     }
 
     #[test]
+    fn a_bar_crosses_a_line_in_its_kind() {
+        let mut canvas = canvas(3, 2);
+        line(&mut canvas, (0, 0), (2, 0), LineKind::Heavy);
+        line(&mut canvas, (0, 1), (2, 1), LineKind::Double);
+
+        canvas.tip(Point::new(1, 0), Direction::Right, Tip::Bar, Part::Edge);
+        canvas.tip(Point::new(1, 1), Direction::Left, Tip::Bar, Part::Edge);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "━╋━\n═╬═");
+    }
+
+    #[test]
+    fn a_tip_drawn_on_a_symbol_replaces_it() {
+        let mut canvas = canvas(2, 1);
+        canvas.symbol(Point::new(1, 0), Symbol::Dot, Part::Node);
+
+        canvas.tip(Point::new(1, 0), Direction::Right, Tip::Arrow, Part::Edge);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), " ▸");
+    }
+
+    #[test]
+    fn a_line_ending_on_a_frame_leaves_the_junction_in_the_frame_role() {
+        let mut canvas = canvas(5, 4);
+        canvas.frame(Rect::new(0, 1, 5, 3), LineKind::Light, Corner::Square, Part::Node);
+
+        line(&mut canvas, (2, 0), (2, 1), LineKind::Light);
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode)[1], "[┌─┴─┐ Node on None]");
+    }
+
+    #[test]
+    fn a_line_crossing_a_frame_takes_the_junction_in_its_role() {
+        let mut canvas = canvas(5, 4);
+        canvas.frame(Rect::new(0, 1, 5, 3), LineKind::Light, Corner::Square, Part::Node);
+
+        line(&mut canvas, (2, 0), (2, 3), LineKind::Light);
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode)[1], "[┌─ Node on None][┼ Edge on None][─┐ Node on None]");
+    }
+
+    #[test]
     fn a_symbol_fills_its_cell_and_stays_whole_under_a_line_leaving_it() {
         let mut canvas = canvas(3, 3);
         canvas.symbol(Point::new(0, 0), Symbol::Dot, Part::Node);
@@ -731,12 +789,21 @@ mod tests {
     }
 
     #[test]
-    fn text_cut_wider_than_the_canvas_leaves_out_a_wide_character_on_the_last_column() {
+    fn text_cut_by_the_right_edge_ends_on_an_ellipsis() {
+        let mut canvas = canvas(5, 1);
+
+        canvas.text_cut(Point::new(2, 0), "abcdef", 10, Part::Label);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "  ab⋯");
+    }
+
+    #[test]
+    fn text_cut_by_the_right_edge_leaves_out_a_wide_character_on_the_last_column() {
         let mut canvas = canvas(3, 1);
 
         canvas.text_cut(Point::new(2, 0), "漢", 5, Part::Label);
 
-        assert_eq!(render(&canvas, GlyphSet::Unicode), "   ");
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "  ⋯");
     }
 
     #[test]
@@ -788,6 +855,28 @@ mod tests {
         line(&mut canvas, (2, 0), (2, 2), LineKind::Light);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "  │  \n  │  \n┌─┴─┐\n│   │\n└───┘");
+    }
+
+    #[test]
+    fn the_last_frame_on_a_corner_sets_whether_it_is_rounded() {
+        let mut canvas = canvas(6, 2);
+        canvas.frame(Rect::new(0, 0, 3, 2), LineKind::Light, Corner::Rounded, Part::Node);
+        canvas.frame(Rect::new(3, 0, 3, 2), LineKind::Light, Corner::Square, Part::Node);
+
+        canvas.frame(Rect::new(0, 0, 3, 2), LineKind::Light, Corner::Square, Part::Node);
+        canvas.frame(Rect::new(3, 0, 3, 2), LineKind::Light, Corner::Rounded, Part::Node);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "┌─┐╭─╮\n└─┘╰─╯");
+    }
+
+    #[test]
+    fn a_frame_on_an_empty_rectangle_draws_nothing() {
+        let mut canvas = canvas(2, 2);
+
+        canvas.frame(Rect::new(0, 0, 0, 2), LineKind::Light, Corner::Square, Part::Node);
+        canvas.frame(Rect::new(0, 0, 2, 0), LineKind::Light, Corner::Square, Part::Node);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "  \n  ");
     }
 
     #[test]

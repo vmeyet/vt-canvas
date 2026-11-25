@@ -24,6 +24,11 @@ impl LineKind {
 pub(crate) struct Sides([Option<LineKind>; 4]);
 
 impl Sides {
+    /// Every side in `kind`.
+    pub(crate) const fn every(kind: LineKind) -> Self {
+        Self([Some(kind); 4])
+    }
+
     pub(crate) fn get(self, side: Direction) -> Option<LineKind> {
         self.0[side as usize]
     }
@@ -49,6 +54,11 @@ impl Sides {
 
     pub(crate) fn count(self) -> usize {
         self.present().count()
+    }
+
+    /// Whether a line enters and leaves through opposite sides.
+    pub(crate) fn runs_through(self) -> bool {
+        Direction::ALL.into_iter().any(|side| self.get(side).is_some() && self.get(side.opposite()).is_some())
     }
 
     pub(crate) fn has_horizontal(self) -> bool {

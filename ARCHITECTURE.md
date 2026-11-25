@@ -44,10 +44,10 @@ This page says how the code is laid out today; when a module or a boundary chang
 - Lines are horizontal or vertical: `horizontal` and `vertical` cannot be given a diagonal.
   A line with both ends on one cell draws nothing.
   A path is a line from each point to the next, turning a corner at each point between; a diagonal step is `Error::Diagonal` and refuses the whole path before anything is drawn.
-- Overwriting: the last drawing on a cell wins, except that a line drawn on a line merges with it, and a line drawn on a shape's mark leaves the mark.
+- Overwriting: the last drawing on a cell wins, except that a line drawn on a line merges with it, and a line drawn on a shape's mark, a tip or a symbol leaves it.
   Writing over either half of a wide character blanks the other half; a wide character without room for both halves is not drawn.
 - Text: control and zero-width characters are left out, so every row is exactly as wide as the canvas.
-  `text_cut` cuts text to a width and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
+  `text_cut` cuts text to a width, or at the right edge of the canvas, and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
 - Roles: the caller's own type, `Canvas<R: Role>`; the canvas keeps one per cell and hands it back, the caller maps each one to a colour.
   `Role` asks for `Copy + Eq + Default`, the default being the role of empty cells, and an ASCII `texture`, 0 unless told otherwise, so roles differ without colour; a `u8` is a role whose texture is itself.
 - Output: `rows` yields each row as runs of text sharing a role and a background, without `\n`.
@@ -106,6 +106,7 @@ Where a third role would be needed (a line through the cell a bar ends in), the 
 - A shape is told apart by its corners and its sides: square or rounded corners, `╱ ╲` corners for a diamond, `< >` sides for a hexagon, `( )` for a stadium.
 - A side that points out (hexagon, asymmetric) points at its middle row, or between its two middle rows when the count is even.
 - A circle is a stadium with a blank column inside each bracket: three rows cannot curve more.
+  A double circle draws its second brackets from four columns, so a narrower one is a stadium.
 - `Shape::inset` gives the columns and rows the outline takes, so the caller sizes the rectangle around its content.
 
 ## Junctions
@@ -117,12 +118,16 @@ The rules, applied in order:
 2. Dashed stays dashed only on a straight run of dashed sides (`╌ ╎`); Unicode has no dashed junction, so anywhere else dashed counts as light.
 3. A side alone continues through its cell: a line end fills the cell (`─`, never the half `╴`).
 4. A rounded corner is an arc (`╭`) only when its two sides are light; a heavy or double corner stays square, and a corner a line joins becomes a junction.
+   The last frame drawn on a corner sets whether it is rounded.
 5. Light and heavy mix freely: Unicode has every combination (`┽ ┿ ╀ ╆`).
 6. Double mixes with light only axis by axis (`╪ ╫ ╞`): an axis with a double side is all double, and heavy elsewhere becomes light, as Unicode has no heavy and double glyph.
 
 Two lines crossing draw `┼`, never a "pass over" where the line drawn first stays whole.
 Tried on the flowchart spike's output: frames are drawn before edges, so a pass over cut every edge where it left a group, which read as the edge ending at the frame; between two edges it broke one of them, which made it harder to follow.
 Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a join.
+
+A junction has one role.
+It keeps the role of a line running through it (entering and leaving by opposite sides) that the new line only ends on, so a node's border stays whole in its colour where an edge joins it (`┤`); otherwise it takes the role of the line drawn last, so an edge crossing a frame stays whole in its colour.
 
 ## Glyph sets
 
@@ -143,7 +148,7 @@ A rounded corner is `.` at the top and `'` at the bottom, so a rounded box still
 Slants are `/ \`; brackets and points are the same in both sets.
 `Canvas::symbol` draws a node too small for an outline on one cell, kept under a line the same way: `Symbol::Dot` `⬤`, `Symbol::RingedDot` `◉` and `Symbol::FilledDiamond` `⬥`, `*`, `@` and `?` in ASCII; `●` and `◆` would be East Asian ambiguous.
 `Canvas::tip` draws an edge's end on one cell, facing the node it goes into, kept under a line the same way, so an edge drawn later does not cut it: `Tip::Arrow` `▸ ◂ ▴ ▾`, `Tip::Triangle` `▹ ◃ ▵ ▿`, `Tip::Diamond` `⬦`, `Tip::FilledDiamond` `⬥`, `Tip::Ring` `o`, `Tip::Fork` `< > Ʌ V`, opening onto the node, and `Tip::Cross` `╳`; in ASCII `> < ^ v` for both triangles, `o`, `#` (not `*`, a multiplicity), `o`, `< > ^ v` and `x`.
-`Tip::Bar` is a line across the edge instead, merged with it into `┼` (`+`).
+`Tip::Bar` is a line across the edge instead, merged with it into `┼` (`+`) in the kind of the line it crosses: `╋` on a heavy line, `╬` on a double one.
 `△ ▷ ◇ ◆ ○` would be East Asian ambiguous.
 
 ## Glyph width
