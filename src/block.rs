@@ -56,8 +56,8 @@ impl Stroke {
         Self { level: (eighth % EIGHTHS as u32) as u8 }
     }
 
-    pub(crate) const fn row(eighth: u32) -> usize {
-        (eighth / EIGHTHS as u32) as usize
+    pub(crate) const fn row(eighth: u32) -> u32 {
+        eighth / EIGHTHS as u32
     }
 
     /// Without the Legacy Computing lines a stroke is the nearest of the top of the cell, its middle and its bottom.
@@ -155,21 +155,21 @@ const fn coarse(eighths: u8) -> u8 {
 /// A block and the cell it is in, counted along a column or a row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Placed {
-    pub(crate) cell: usize,
+    pub(crate) cell: u16,
     pub(crate) block: Block,
 }
 
 /// The block of each cell a stretch covers.
 ///
 /// `eighths` counts eighths of a cell from the first of `cells` cells, whose side `low_side` faces the start; what is past the last cell is cut.
-pub(crate) fn span(eighths: Range<u32>, cells: usize, low_side: Direction) -> impl Iterator<Item = Placed> {
+pub(crate) fn span(eighths: Range<u32>, cells: u16, low_side: Direction) -> impl Iterator<Item = Placed> {
     let per_cell = u32::from(EIGHTHS);
-    let end = eighths.end.min(u32::try_from(cells).unwrap_or(u32::MAX).saturating_mul(per_cell));
+    let end = eighths.end.min(u32::from(cells) * per_cell);
     let start = eighths.start.min(end);
     (start / per_cell..end.div_ceil(per_cell)).filter(move |_| start < end).map(move |cell| {
         let low = start.saturating_sub(cell * per_cell);
         let high = (end - cell * per_cell).min(per_cell);
-        Placed { cell: cell as usize, block: Block::between(low as u8, high as u8, low_side) }
+        Placed { cell: cell as u16, block: Block::between(low as u8, high as u8, low_side) }
     })
 }
 
@@ -199,7 +199,7 @@ pub(crate) mod tests {
         assert_eq!((Stroke::row(21), Stroke::at(21)), (2, Stroke { level: 5 }));
     }
 
-    fn blocks(cells: usize, eighths: Range<u32>) -> Vec<(usize, Block)> {
+    fn blocks(cells: u16, eighths: Range<u32>) -> Vec<(u16, Block)> {
         span(eighths, cells, Direction::Up).map(|placed| (placed.cell, placed.block)).collect()
     }
 

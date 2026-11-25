@@ -2,19 +2,21 @@ use unicode_width::UnicodeWidthChar;
 
 /// Columns `text` takes once drawn: control and zero-width characters are left out, wide characters count two.
 pub fn text_width(text: &str) -> usize {
-    glyphs(text).map(|glyph| glyph.width).sum()
+    letters(text).map(|letter| usize::from(letter.width)).sum()
 }
 
+/// A character of text and the columns it takes, 1 or 2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Glyph {
+pub(crate) struct Letter {
     pub(crate) char: char,
-    pub(crate) width: usize,
+    pub(crate) width: u8,
 }
 
 /// The characters of `text` a cell can hold; anything else would break the column count of its row.
-pub(crate) fn glyphs(text: &str) -> impl Iterator<Item = Glyph> {
+pub(crate) fn letters(text: &str) -> impl Iterator<Item = Letter> {
     text.chars().filter_map(|char| match char.width() {
-        Some(width @ 1..=2) => Some(Glyph { char, width }),
+        Some(1) => Some(Letter { char, width: 1 }),
+        Some(2) => Some(Letter { char, width: 2 }),
         _ => None,
     })
 }
@@ -34,8 +36,8 @@ mod tests {
     }
 
     #[test]
-    fn glyphs_drop_what_a_cell_cannot_hold() {
-        let chars: String = glyphs("e\u{301}\u{7}x").map(|glyph| glyph.char).collect();
+    fn letters_drop_what_a_cell_cannot_hold() {
+        let chars: String = letters("e\u{301}\u{7}x").map(|letter| letter.char).collect();
 
         assert_eq!(chars, "ex");
     }

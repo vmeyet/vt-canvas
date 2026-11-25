@@ -87,9 +87,21 @@ pub enum Direction {
 }
 
 impl Direction {
+    /// In the order of [`index`](Self::index).
     pub(crate) const ALL: [Self; 4] = [Self::Up, Self::Right, Self::Down, Self::Left];
 
-    pub(crate) const fn opposite(self) -> Self {
+    /// Its place in [`ALL`](Self::ALL), clockwise from the top.
+    pub(crate) const fn index(self) -> usize {
+        match self {
+            Self::Up => 0,
+            Self::Right => 1,
+            Self::Down => 2,
+            Self::Left => 3,
+        }
+    }
+
+    /// The direction it faces away from.
+    pub const fn opposite(self) -> Self {
         match self {
             Self::Up => Self::Down,
             Self::Right => Self::Left,
@@ -100,5 +112,15 @@ impl Direction {
 
     pub(crate) const fn is_horizontal(self) -> bool {
         matches!(self, Self::Left | Self::Right)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_direction_is_at_its_index() {
+        assert_eq!(Direction::ALL.map(Direction::index), [0, 1, 2, 3]);
     }
 }

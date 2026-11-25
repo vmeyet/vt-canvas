@@ -40,7 +40,7 @@ This page says how the code is laid out today; when a module or a boundary chang
 ## Contract
 
 - Size: `Canvas::new` refuses more than 1000 columns (`MAX_WIDTH`) or 1000000 cells (`MAX_CELLS`, width times height) with `Error::TooLarge`, so a narrow drawing can be tall.
-- Clipping: drawing out of bounds is cut at the edges, never an error, never a panic.
+- Clipping: drawing out of bounds is cut at the edges, never an error, never a panic; a line or a segment only walks the cells on the canvas, so its cost is bounded by the canvas, not by its ends.
 - Lines are horizontal or vertical: `horizontal` and `vertical` cannot be given a diagonal.
   A line with both ends on one cell draws nothing.
   A path is a line from each point to the next, turning a corner at each point between; a diagonal step is `Error::Diagonal` and refuses the whole path before anything is drawn.
@@ -50,7 +50,7 @@ This page says how the code is laid out today; when a module or a boundary chang
   `text_cut` cuts text to a width, or at the right edge of the canvas, and ends it on `⋯` (`~` in ASCII) when cut; `…` would be East Asian ambiguous.
 - Roles: the caller's own type, `Canvas<R: Role>`; the canvas keeps one per cell and hands it back, the caller maps each one to a colour.
   `Role` asks for `Copy + Eq + Default`, the default being the role of empty cells, and an ASCII `texture`, 0 unless told otherwise, so roles differ without colour; a `u8` is a role whose texture is itself.
-- Output: `rows` yields each row as runs of text sharing a role and a background, without `\n`.
+- Output: `rows` yields each row as runs of text sharing a role and a background, without `\n`; `lines` yields each row's text alone.
   A run's `background` is the role behind its characters, `None` where nothing is.
 - Cost at the cell limit, measured on an Apple M5 with `cargo bench --bench canvas`: a lattice of lines on every other row and column draws in 4 ms and reads back in 8 ms; a bar in every column under a line of octant dots across every row draws in 17 ms and reads back in 5 ms.
   With a role of 2 bytes, a cell takes 8 bytes and its background 2, so the canvas holds 10 MB.

@@ -43,8 +43,7 @@ fuzz_target!(|drawing: Drawing| {
         apply(&mut canvas, operation);
     }
     for glyphs in [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii] {
-        for row in canvas.rows(glyphs) {
-            let text: String = row.into_iter().map(|run| run.text).collect();
+        for text in canvas.lines(glyphs) {
             let columns: usize = text.chars().map(|char| char.width().filter(|&width| width > 0).unwrap_or(usize::MAX / 4)).sum();
             assert_eq!(columns, usize::from(drawing.width % MAX_SIDE), "row {text:?}");
         }

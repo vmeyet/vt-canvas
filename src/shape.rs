@@ -247,7 +247,7 @@ mod tests {
     use crate::{Canvas, Direction, GlyphSet, LineKind, Rect, Tip};
 
     fn render(canvas: &Canvas<Part>, glyphs: GlyphSet) -> String {
-        canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect::<String>()).collect::<Vec<_>>().join("\n")
+        canvas.lines(glyphs).collect::<Vec<_>>().join("\n")
     }
 
     /// The shape around a `Label` with a space on each side, as a flowchart node.

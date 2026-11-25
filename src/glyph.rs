@@ -1,7 +1,7 @@
 use crate::geometry::Direction;
 use crate::line::{LineKind, Sides};
 
-/// The characters a drawing is read back in; text is written as given.
+/// The characters a drawing is read back in: lines and junctions, shapes, tips, symbols, blocks, strokes, wedges and dots; text is written as given.
 ///
 /// Each Unicode set holds the glyphs of the ones after it, so a drawing asks for the best glyph and gets the closest the set has.
 #[non_exhaustive]
@@ -107,8 +107,8 @@ fn dash(sides: Sides) -> Option<char> {
 
 /// A line end fills its cell instead of stopping half-way, as the half glyphs `╴ ╵` would.
 fn straighten(sides: Sides) -> Sides {
-    let mut present = sides.present();
-    match (present.next(), present.next()) {
+    let mut drawn = sides.drawn();
+    match (drawn.next(), drawn.next()) {
         (Some((side, kind)), None) => sides.with(side.opposite(), Some(kind)),
         _ => sides,
     }

@@ -264,8 +264,7 @@ pub(crate) mod tests {
     fn drawn(dots: Dots) -> String {
         let canvas = drawing(dots);
         let in_set = |glyphs| {
-            let rows: Vec<String> =
-                canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect::<String>() + "|").collect();
+            let rows: Vec<String> = canvas.lines(glyphs).map(|line| line + "|").collect();
             format!("{glyphs:?}\n{}", rows.join("\n"))
         };
         SETS.map(in_set).join("\n")

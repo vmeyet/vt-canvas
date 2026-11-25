@@ -18,8 +18,8 @@ impl Role for Part {}
 fn main() -> Result<(), Error> {
     let canvas = flowchart()?;
     for glyphs in [GlyphSet::Unicode, GlyphSet::Ascii] {
-        for runs in canvas.rows(glyphs) {
-            println!("{}", runs.into_iter().map(|run| run.text).collect::<String>());
+        for line in canvas.lines(glyphs) {
+            println!("{line}");
         }
         println!();
     }

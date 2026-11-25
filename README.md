@@ -26,8 +26,8 @@ canvas.tip(Point::new(8, 1), Direction::Right, Tip::Arrow, Part::Edge);
 canvas.frame(Rect::new(9, 0, 5, 3), LineKind::Light, Corner::Rounded, Part::Node);
 canvas.text(Point::new(11, 1), "B", Part::Label);
 
-let rows: Vec<String> = canvas.rows(GlyphSet::Unicode).map(|runs| runs.into_iter().map(|run| run.text).collect()).collect();
-assert_eq!(rows, ["╭───╮    ╭───╮", "│ A ├───▸│ B │", "╰───╯    ╰───╯"]);
+let lines: Vec<String> = canvas.lines(GlyphSet::Unicode).collect();
+assert_eq!(lines, ["╭───╮    ╭───╮", "│ A ├───▸│ B │", "╰───╯    ╰───╯"]);
 # Ok::<(), vt_canvas::Error>(())
 ```
 

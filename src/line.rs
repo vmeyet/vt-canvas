@@ -30,12 +30,12 @@ impl Sides {
     }
 
     pub(crate) fn get(self, side: Direction) -> Option<LineKind> {
-        self.0[side as usize]
+        self.0[side.index()]
     }
 
     pub(crate) fn with(self, side: Direction, kind: Option<LineKind>) -> Self {
         let mut kinds = self.0;
-        kinds[side as usize] = kind;
+        kinds[side.index()] = kind;
         Self(kinds)
     }
 
@@ -48,12 +48,12 @@ impl Sides {
         Self(std::array::from_fn(|side| self.0[side].map(|kind| f(Direction::ALL[side], kind))))
     }
 
-    pub(crate) fn present(self) -> impl Iterator<Item = (Direction, LineKind)> {
+    pub(crate) fn drawn(self) -> impl Iterator<Item = (Direction, LineKind)> {
         Direction::ALL.into_iter().filter_map(move |side| self.get(side).map(|kind| (side, kind)))
     }
 
     pub(crate) fn count(self) -> usize {
-        self.present().count()
+        self.drawn().count()
     }
 
     /// Whether a line enters and leaves through opposite sides.
@@ -62,19 +62,19 @@ impl Sides {
     }
 
     pub(crate) fn has_horizontal(self) -> bool {
-        self.present().any(|(side, _)| side.is_horizontal())
+        self.drawn().any(|(side, _)| side.is_horizontal())
     }
 
     pub(crate) fn has_vertical(self) -> bool {
-        self.present().any(|(side, _)| !side.is_horizontal())
+        self.drawn().any(|(side, _)| !side.is_horizontal())
     }
 
     pub(crate) fn all(self, kind: LineKind) -> bool {
-        self.present().all(|(_, present)| present == kind)
+        self.drawn().all(|(_, drawn)| drawn == kind)
     }
 
     pub(crate) fn any(self, kind: LineKind) -> bool {
-        self.present().any(|(_, present)| present == kind)
+        self.drawn().any(|(_, drawn)| drawn == kind)
     }
 }
 

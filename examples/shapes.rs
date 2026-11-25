@@ -22,8 +22,8 @@ const CELL_HEIGHT: u16 = 5;
 fn main() -> Result<(), Error> {
     let canvas = every_shape()?;
     for glyphs in [GlyphSet::Unicode, GlyphSet::Ascii] {
-        for runs in canvas.rows(glyphs) {
-            println!("{}", runs.into_iter().map(|run| run.text).collect::<String>().trim_end());
+        for line in canvas.lines(glyphs) {
+            println!("{}", line.trim_end());
         }
         println!();
     }

@@ -11,8 +11,8 @@ fn main() -> Result<(), Error> {
     let canvas = drawing()?;
     for glyphs in [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii] {
         println!("{glyphs:?}");
-        for runs in canvas.rows(glyphs) {
-            println!("{}", runs.into_iter().map(|run| run.text).collect::<String>());
+        for line in canvas.lines(glyphs) {
+            println!("{line}");
         }
         println!();
     }
