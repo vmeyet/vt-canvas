@@ -1,7 +1,7 @@
 use std::fmt;
 use std::ops::Range;
 
-use crate::block::{self, Block, Stroke};
+use crate::block::{self, Block, Cover, Stroke};
 use crate::geometry::{Direction, Point, Rect};
 use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
@@ -156,30 +156,31 @@ enum Cell {
 }
 
 impl Cell {
-    /// The role a drawing over this cell keeps behind it: a block's, when it fills at least half the cell.
-    const fn behind(self) -> Option<Role> {
+    /// How much of the cell this glyph fills, from which side and in which role, when it is one that fills.
+    const fn cover(self) -> Option<(Cover, Role)> {
         match self {
-            Self::Block { block, role } if block.fills_half() => Some(role),
-            Self::Wedge { wedge, role } if wedge.fills_half() => Some(role),
-            Self::Halves(halves) => halves.behind(),
+            Self::Block { block, role } => Some((block.cover(), role)),
+            Self::Wedge { wedge, role } => Some((wedge.cover(), role)),
+            Self::Halves(halves) => halves.cover(),
             _ => None,
         }
     }
 
+    /// The role `over`, drawn on this cell, keeps behind it: this cell's, when it fills at least half of what `over` leaves.
+    fn behind(self, over: Self) -> Option<Role> {
+        let (cover, role) = self.cover()?;
+        cover.shows_behind(over.cover().map(|(over, _)| over)).then_some(role)
+    }
+
     const fn fills_cell(self) -> bool {
-        match self {
-            Self::Block { block, .. } => block.fills_cell(),
-            Self::Wedge { wedge, .. } => wedge.fills_cell(),
-            Self::Halves(halves) => halves.fills_cell(),
-            _ => false,
-        }
+        matches!(self.cover(), Some((cover, _)) if cover.parts >= Cover::WHOLE)
     }
 }
 
 /// A grid of cells to draw text, lines, frames and arrows on, read back as rows of styled runs.
 ///
 /// Drawing out of bounds is clipped; the last drawing on a cell wins, except that lines merge into junctions
-/// and a block at least half a cell stays behind what is drawn over it, as the cell's background.
+/// and a block filling at least half of what a drawing leaves of its cell stays behind it, as the cell's background.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Canvas {
     width: usize,
@@ -448,7 +449,7 @@ impl Canvas {
         if x + 1 < self.width && self.cells[index + 1] == Cell::WideTail {
             self.cells[index + 1] = Cell::Empty;
         }
-        self.grounds[index] = if cell.fills_cell() { None } else { self.cells[index].behind().or(self.grounds[index]) };
+        self.grounds[index] = if cell.fills_cell() { None } else { self.cells[index].behind(cell).or(self.grounds[index]) };
         self.cells[index] = cell;
     }
 
@@ -1074,6 +1075,18 @@ mod tests {
         canvas.column(0, 11..16, Role::Series(0));
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[█ Series(1) on None]", "[▅ Series(0) on Some(Series(1))]"]);
+    }
+
+    #[test]
+    fn a_small_block_stays_behind_a_block_that_leaves_it_most_of_the_rest() {
+        let mut canvas = canvas(2, 1);
+        canvas.column(0, 0..2, Role::Series(1));
+        canvas.column(1, 0..1, Role::Series(1));
+
+        canvas.column(0, 3..8, Role::Series(0));
+        canvas.column(1, 3..8, Role::Series(0));
+
+        assert_eq!(styles(&canvas, GlyphSet::Unicode), ["[▅ Series(0) on Some(Series(1))][▅ Series(0) on None]"]);
     }
 
     #[test]

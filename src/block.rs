@@ -12,6 +12,34 @@ const FROM_LEFT: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 const FROM_UP: [char; 7] = ['▔', '\u{1FB82}', '\u{1FB83}', '▀', '\u{1FB84}', '\u{1FB85}', '\u{1FB86}'];
 const FROM_RIGHT: [char; 7] = ['▕', '\u{1FB87}', '\u{1FB88}', '▐', '\u{1FB89}', '\u{1FB8A}', '\u{1FB8B}'];
 
+/// How much of a cell a glyph fills and from which side, in 24ths so that eighths and sixths are whole numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Cover {
+    pub(crate) from: Direction,
+    pub(crate) parts: u8,
+}
+
+impl Cover {
+    pub(crate) const WHOLE: u8 = 24;
+
+    /// Whether this cover is at least half of what `over`, drawn on the same cell, leaves of it:
+    /// then its role shows the cell better as the background than nothing would.
+    ///
+    /// `over` fills from the same side (it hides this cover first), the opposite side (it hides it last) or across (it hides its share).
+    pub(crate) const fn shows_behind(self, over: Option<Self>) -> bool {
+        let Some(over) = over else { return self.parts * 2 >= Self::WHOLE };
+        let left = Self::WHOLE.saturating_sub(over.parts);
+        let visible = if over.from as u8 == self.from as u8 {
+            self.parts.saturating_sub(over.parts)
+        } else if over.from as u8 == self.from.opposite() as u8 {
+            if self.parts < left { self.parts } else { left }
+        } else {
+            (self.parts as u16 * left as u16 / Self::WHOLE as u16) as u8
+        };
+        left > 0 && visible * 2 >= left
+    }
+}
+
 /// The line one eighth of a cell thick at each height, from the top of the cell down.
 const STROKES: [char; 8] = ['▔', '\u{1FB76}', '\u{1FB77}', '\u{1FB78}', '\u{1FB79}', '\u{1FB7A}', '\u{1FB7B}', '▁'];
 
@@ -62,12 +90,12 @@ impl Block {
         Self::new(if nearer_low { low_side } else { low_side.opposite() }, high - low)
     }
 
-    pub(crate) const fn fills_cell(self) -> bool {
-        self.eighths >= EIGHTHS
+    const fn fills_half(self) -> bool {
+        self.eighths >= HALF
     }
 
-    pub(crate) const fn fills_half(self) -> bool {
-        self.eighths >= HALF
+    pub(crate) const fn cover(self) -> Cover {
+        Cover { from: self.from, parts: self.eighths * (Cover::WHOLE / EIGHTHS) }
     }
 
     pub(crate) fn styled(self, role: Role, ground: Option<Role>, glyphs: GlyphSet) -> Styled {
@@ -205,6 +233,19 @@ pub(crate) mod tests {
     fn a_stretch_inside_a_cell_moves_to_the_side_it_is_nearer() {
         assert_eq!(blocks(1, 1..4), [(0, Block { from: Direction::Up, eighths: 3 })]);
         assert_eq!(blocks(1, 4..7), [(0, Block { from: Direction::Down, eighths: 3 })]);
+    }
+
+    #[test]
+    fn a_cover_shows_behind_a_drawing_when_it_is_half_of_what_the_drawing_leaves() {
+        let cover = |from, eighths| Block::new(from, eighths).cover();
+        let behind = |under: Cover, over| under.shows_behind(Some(over));
+
+        assert_eq!([3, 4].map(|eighths| cover(Direction::Down, eighths).shows_behind(None)), [false, true]);
+        assert_eq!([1, 2].map(|eighths| behind(cover(Direction::Up, eighths), cover(Direction::Down, 5))), [false, true]);
+        assert_eq!([5, 6].map(|eighths| behind(cover(Direction::Down, eighths), cover(Direction::Down, 2))), [true, true]);
+        assert_eq!([4, 5].map(|eighths| behind(cover(Direction::Down, eighths), cover(Direction::Down, 2))), [false, true]);
+        assert_eq!([3, 4].map(|eighths| behind(cover(Direction::Left, eighths), cover(Direction::Down, 2))), [false, true]);
+        assert!(!behind(cover(Direction::Up, 8), cover(Direction::Down, 8)));
     }
 
     #[test]

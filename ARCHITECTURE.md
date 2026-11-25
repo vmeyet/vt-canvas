@@ -26,7 +26,7 @@ This page says how the code is laid out today; when a module or a boundary chang
 | `canvas` | `Canvas`, its cells and their backgrounds, `Frame`, `Role`, `Run`, `Error` and the size limits |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
 | `glyph` | `GlyphSet`: the character for a cell's sides, an arrow, a shape's mark or a filled cell, junction tables included |
-| `block` | A cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, and the cells a stretch covers |
+| `block` | A cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, the cells a stretch covers, and how much of a cell a glyph covers |
 | `pixel` | `Dots`, `Pixel`: the dots of a cell and their glyph in each set, the two halves of a half-block cell, and the dots of a straight line |
 | `wedge` | `Wedge`, `Fill`: a cell filled under or over a slanted edge, its glyph in each set |
 | `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines; `Marker`, a node on one cell |
@@ -85,10 +85,12 @@ A terminal cell has one character, one colour for it and one colour behind it, s
 Each cell keeps a glyph with its role and, behind it, a *background* role.
 
 1. A drawing replaces the cell's glyph; the last one wins, as for text and lines.
-2. When the glyph it replaces is a block, a wedge or a half-block dot filling at least half the cell, its role becomes the background; a smaller one is dropped.
+2. The glyph it replaces stays as the background when it is a block, a wedge or a half-block dot filling at least half of what the drawing leaves of the cell; a smaller one is dropped.
+   Text, a line, a stroke or dots leave the whole cell, so a block stays behind them from half a cell up.
+   A block or a wedge leaves what it does not fill: `▅` drawn over `▔` keeps it, as the upper quarter is most of the three eighths left, and the cell shows both roles.
 3. Otherwise the background stays as it was, until a drawing that fills the whole cell clears it.
 
-So text, a line, a stroke or dots over a bar are drawn on the bar's colour, and a block drawn over a taller one shows both: `▅` in its role on the other's.
+So text, a line, a stroke or dots over a bar are drawn on the bar's colour, a block drawn over a taller one shows both, and two bands meeting in a cell fill it between them.
 Where a third role would be needed (a line through the cell a bar ends in), the bar gains or loses under half a cell.
 
 ## Shapes

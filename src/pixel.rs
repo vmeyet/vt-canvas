@@ -1,4 +1,6 @@
+use crate::block::Cover;
 use crate::canvas::{Role, Styled};
+use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
 
 /// A dot on the grid [`Dots`] cuts the cells into: `x` counts dots from the left of the canvas, `y` from its top.
@@ -167,9 +169,15 @@ impl Halves {
         if bit == 0b01 { Self { top: Some(role), ..self } } else { Self { bottom: Some(role), ..self } }
     }
 
-    /// One half lit is a block half a cell tall, so it stays behind what is drawn over it; of two halves, the lower one.
-    pub(crate) const fn behind(self) -> Option<Role> {
-        if self.bottom.is_some() { self.bottom } else { self.top }
+    /// One half lit is a block half a cell tall, so it may stay behind what is drawn over it; of two halves, the lower one's role does.
+    pub(crate) const fn cover(self) -> Option<(Cover, Role)> {
+        let half = Cover::WHOLE / 2;
+        match (self.top, self.bottom) {
+            (None, None) => None,
+            (Some(top), None) => Some((Cover { from: Direction::Up, parts: half }, top)),
+            (None, Some(bottom)) => Some((Cover { from: Direction::Down, parts: half }, bottom)),
+            (Some(_), Some(bottom)) => Some((Cover { from: Direction::Down, parts: Cover::WHOLE }, bottom)),
+        }
     }
 
     pub(crate) const fn fills_cell(self) -> bool {

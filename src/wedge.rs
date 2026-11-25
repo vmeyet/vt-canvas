@@ -1,4 +1,4 @@
-use crate::block::Block;
+use crate::block::{Block, Cover};
 use crate::canvas::{Role, Styled};
 use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
@@ -66,12 +66,12 @@ impl Wedge {
         self.filled() == 0
     }
 
-    pub(crate) const fn fills_half(self) -> bool {
-        self.filled() >= THIRDS
-    }
-
-    pub(crate) const fn fills_cell(self) -> bool {
-        self.filled() == 2 * THIRDS
+    pub(crate) const fn cover(self) -> Cover {
+        let from = match self.fill {
+            Fill::Below => Direction::Down,
+            Fill::Above => Direction::Up,
+        };
+        Cover { from, parts: self.filled() * (Cover::WHOLE / (2 * THIRDS)) }
     }
 
     pub(crate) fn styled(self, role: Role, ground: Option<Role>, glyphs: GlyphSet) -> Styled {
@@ -145,7 +145,7 @@ pub(crate) mod tests {
             let [below, above] = [Fill::Below, Fill::Above].map(|fill| Wedge { left, right, fill });
 
             assert_eq!(below.filled() + above.filled(), 2 * THIRDS);
-            assert_eq!(below.fills_nothing(), above.fills_cell());
+            assert_eq!(below.fills_nothing(), above.cover().parts == Cover::WHOLE);
         }
     }
 
@@ -153,7 +153,7 @@ pub(crate) mod tests {
     fn thirds_past_the_top_of_the_cell_count_as_the_top() {
         let wedge = Wedge { left: 200, right: 9, fill: Fill::Below };
 
-        assert!(wedge.fills_cell());
+        assert_eq!(wedge.cover().parts, Cover::WHOLE);
         assert_eq!(wedge.styled(Role::Plain, None, GlyphSet::Unicode).char, '█');
     }
 }
