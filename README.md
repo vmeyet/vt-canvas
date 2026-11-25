@@ -21,7 +21,7 @@ impl Role for Part {}
 let mut canvas = Canvas::new(14, 3)?;
 canvas.frame(Rect::new(0, 0, 5, 3), LineKind::Light, Corner::Rounded, Part::Node);
 canvas.text(Point::new(2, 1), "A", Part::Label);
-canvas.line(Point::new(4, 1), Point::new(7, 1), LineKind::Light, Part::Edge)?;
+canvas.horizontal(1, 4, 7, LineKind::Light, Part::Edge);
 canvas.tip(Point::new(8, 1), Direction::Right, Tip::Arrow, Part::Edge);
 canvas.frame(Rect::new(9, 0, 5, 3), LineKind::Light, Corner::Rounded, Part::Node);
 canvas.text(Point::new(11, 1), "B", Part::Label);

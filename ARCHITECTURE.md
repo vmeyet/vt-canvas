@@ -39,9 +39,9 @@ This page says how the code is laid out today; when a module or a boundary chang
 
 - Size: `Canvas::new` refuses more than 1000 columns (`MAX_WIDTH`) or 1000000 cells (`MAX_CELLS`, width times height) with `Error::TooLarge`, so a narrow drawing can be tall.
 - Clipping: drawing out of bounds is cut at the edges, never an error, never a panic.
-- Lines are horizontal or vertical; a diagonal is `Error::Diagonal`.
+- Lines are horizontal or vertical: `horizontal` and `vertical` cannot be given a diagonal.
   A line with both ends on one cell draws nothing.
-  A path is a line from each point to the next, turning a corner at each point between; a diagonal step refuses the whole path before anything is drawn.
+  A path is a line from each point to the next, turning a corner at each point between; a diagonal step is `Error::Diagonal` and refuses the whole path before anything is drawn.
 - Overwriting: the last drawing on a cell wins, except that a line drawn on a line merges with it, and a line drawn on a shape's mark leaves the mark.
   Writing over either half of a wide character blanks the other half; a wide character without room for both halves is not drawn.
 - Text: control and zero-width characters are left out, so every row is exactly as wide as the canvas.

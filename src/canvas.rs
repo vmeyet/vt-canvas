@@ -49,11 +49,11 @@ pub enum Error {
         /// Rows asked for.
         height: u16,
     },
-    /// A line's ends share neither a row nor a column.
+    /// Two consecutive points of a path share neither a row nor a column.
     Diagonal {
-        /// Where the line starts.
+        /// Where the step starts.
         from: Point,
-        /// Where the line ends.
+        /// Where the step ends.
         to: Point,
     },
 }
@@ -65,7 +65,7 @@ impl fmt::Display for Error {
                 write!(f, "a {width}x{height} canvas is over the limit of {MAX_WIDTH} columns or {MAX_CELLS} cells")
             }
             Self::Diagonal { from, to } => {
-                write!(f, "a line from ({}, {}) to ({}, {}) is neither horizontal nor vertical", from.x, from.y, to.x, to.y)
+                write!(f, "a path's step from ({}, {}) to ({}, {}) is neither horizontal nor vertical", from.x, from.y, to.x, to.y)
             }
         }
     }
@@ -187,13 +187,14 @@ impl<R: Role> Canvas<R> {
         }
     }
 
-    /// Draws a horizontal or vertical line, both ends included; a cell it shares with another line becomes a junction.
-    pub fn line(&mut self, from: Point, to: Point, kind: LineKind, role: R) -> Result<(), Error> {
-        if from.x != to.x && from.y != to.y {
-            return Err(Error::Diagonal { from, to });
-        }
-        self.straight(from, to, kind, role);
-        Ok(())
+    /// Draws a line along row `y` from column `from_x` to column `to_x`, both included; a cell it shares with another line becomes a junction.
+    pub fn horizontal(&mut self, y: u16, from_x: u16, to_x: u16, kind: LineKind, role: R) {
+        self.straight(Point::new(from_x, y), Point::new(to_x, y), kind, role);
+    }
+
+    /// Draws a line down column `x` from row `from_y` to row `to_y`, both included; a cell it shares with another line becomes a junction.
+    pub fn vertical(&mut self, x: u16, from_y: u16, to_y: u16, kind: LineKind, role: R) {
+        self.straight(Point::new(x, from_y), Point::new(x, to_y), kind, role);
     }
 
     /// Draws a line from each point to the next, so they turn a corner at every point between the ends.
@@ -209,7 +210,7 @@ impl<R: Role> Canvas<R> {
         Ok(())
     }
 
-    /// Draws the border of `rect` in lines of `kind`; a frame without room for a line inside is drawn as lines.
+    /// Draws the border of `rect` in lines of `kind`.
     pub fn frame(&mut self, rect: Rect, kind: LineKind, corner: Corner, role: R) {
         if rect.width == 0 || rect.height == 0 {
             return;
@@ -465,7 +466,17 @@ mod tests {
     }
 
     fn line(canvas: &mut Canvas<Part>, from: (u16, u16), to: (u16, u16), kind: LineKind) {
-        canvas.line(Point::new(from.0, from.1), Point::new(to.0, to.1), kind, Part::Edge).unwrap();
+        line_between(canvas, Point::new(from.0, from.1), Point::new(to.0, to.1), kind);
+    }
+
+    /// The line between two points sharing a row or a column.
+    fn line_between(canvas: &mut Canvas<Part>, from: Point, to: Point, kind: LineKind) {
+        if from.y == to.y {
+            canvas.horizontal(from.y, from.x, to.x, kind, Part::Edge);
+        } else {
+            assert_eq!(from.x, to.x, "a diagonal from {from:?} to {to:?}");
+            canvas.vertical(from.x, from.y, to.y, kind, Part::Edge);
+        }
     }
 
     fn tallest_full_width() -> u16 {
@@ -745,14 +756,6 @@ mod tests {
 
         assert_eq!(result, Err(Error::Diagonal { from: points[1], to: points[2] }));
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   \n   \n   ");
-    }
-
-    #[test]
-    fn a_diagonal_line_is_refused() {
-        let mut canvas = canvas(3, 3);
-        let (from, to) = (Point::new(0, 0), Point::new(2, 2));
-
-        assert_eq!(canvas.line(from, to, LineKind::Light, Part::Edge), Err(Error::Diagonal { from, to }));
     }
 
     #[test]
@@ -1132,7 +1135,7 @@ mod tests {
                     draw(&mut canvas, fine, Part::Series(series));
                 }
                 for ((from, to), kind) in lines {
-                    canvas.line(from, to, kind, Part::Edge).unwrap();
+                    line_between(&mut canvas, from, to, kind);
                 }
                 for (corner, size, kind) in frames {
                     canvas.frame(Rect::new(corner.x, corner.y, size.x, size.y), kind, Corner::Rounded, Part::Node);
@@ -1170,8 +1173,8 @@ mod tests {
                 let mut forward = canvas(16, 16);
                 let mut backward = canvas(16, 16);
 
-                forward.line(from, to, kind, Part::Edge).unwrap();
-                backward.line(to, from, kind, Part::Edge).unwrap();
+                line_between(&mut forward, from, to, kind);
+                line_between(&mut backward, to, from, kind);
 
                 prop_assert_eq!(forward, backward);
             }
@@ -1180,10 +1183,10 @@ mod tests {
             fn drawing_a_line_twice_changes_nothing(((from, to), kind) in (straight(), kind()), path in path()) {
                 let mut once = canvas(16, 16);
                 once.path(&path, LineKind::Light, Part::Edge).unwrap();
-                once.line(from, to, kind, Part::Edge).unwrap();
+                line_between(&mut once, from, to, kind);
                 let mut twice = once.clone();
 
-                twice.line(from, to, kind, Part::Edge).unwrap();
+                line_between(&mut twice, from, to, kind);
 
                 prop_assert_eq!(once, twice);
             }
@@ -1195,7 +1198,7 @@ mod tests {
 
                 path.path(&points, kind, Part::Edge).unwrap();
                 for pair in points.windows(2) {
-                    lines.line(pair[0], pair[1], kind, Part::Edge).unwrap();
+                    line_between(&mut lines, pair[0], pair[1], kind);
                 }
 
                 prop_assert_eq!(path, lines);

@@ -16,10 +16,10 @@ fn main() {
 fn lattice() -> Result<Canvas<u8>, Error> {
     let mut canvas = Canvas::new(MAX_WIDTH, HEIGHT)?;
     for y in (0..HEIGHT).step_by(2) {
-        canvas.line(Point::new(0, y), Point::new(MAX_WIDTH - 1, y), LineKind::Light, 0)?;
+        canvas.horizontal(y, 0, MAX_WIDTH - 1, LineKind::Light, 0);
     }
     for x in (0..MAX_WIDTH).step_by(2) {
-        canvas.line(Point::new(x, 0), Point::new(x, HEIGHT - 1), LineKind::Heavy, 0)?;
+        canvas.vertical(x, 0, HEIGHT - 1, LineKind::Heavy, 0);
     }
     Ok(canvas)
 }

@@ -55,9 +55,7 @@ fn node(canvas: &mut Canvas<Part>, rect: Rect, label: &str) {
 
 /// Draws the path through `points`, leaving its source's border, with an arrow on its last point, next to its target.
 fn edge(canvas: &mut Canvas<Part>, points: &[Point], kind: LineKind) -> Result<(), Error> {
-    for pair in points.windows(2) {
-        canvas.line(pair[0], pair[1], kind, Part::Edge)?;
-    }
+    canvas.path(points, kind, Part::Edge)?;
     if let [.., before, end] = points {
         let direction = if end.x > before.x {
             Direction::Right

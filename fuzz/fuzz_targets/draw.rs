@@ -24,7 +24,8 @@ struct Drawing {
 enum Operation {
     Text { at: (u16, u16), text: String, role: u8 },
     TextCut { at: (u16, u16), text: String, max_width: u16, role: u8 },
-    Line { from: (u16, u16), to: (u16, u16), kind: u8, role: u8 },
+    Horizontal { y: u16, from_x: u16, to_x: u16, kind: u8, role: u8 },
+    Vertical { x: u16, from_y: u16, to_y: u16, kind: u8, role: u8 },
     Path { points: Vec<(u16, u16)>, kind: u8, role: u8 },
     Frame { rect: (u16, u16, u16, u16), kind: u8, rounded: bool, role: u8 },
     Tip { at: (u16, u16), direction: u8, tip: u8, role: u8 },
@@ -54,10 +55,11 @@ fn apply(canvas: &mut Canvas<u8>, operation: &Operation) {
     match operation {
         Operation::Text { at, text, role } => canvas.text(point(*at), text, *role),
         Operation::TextCut { at, text, max_width, role } => canvas.text_cut(point(*at), text, *max_width, *role),
-        Operation::Line { from, to, kind, role } => {
-            let (from, to) = (point(*from), point(*to));
-            let refused = canvas.line(from, to, line_kind(*kind), *role).is_err();
-            assert_eq!(refused, from.x != to.x && from.y != to.y);
+        Operation::Horizontal { y, from_x, to_x, kind, role } => {
+            canvas.horizontal(coordinate(*y), coordinate(*from_x), coordinate(*to_x), line_kind(*kind), *role);
+        }
+        Operation::Vertical { x, from_y, to_y, kind, role } => {
+            canvas.vertical(coordinate(*x), coordinate(*from_y), coordinate(*to_y), line_kind(*kind), *role);
         }
         Operation::Path { points, kind, role } => {
             let points: Vec<Point> = points.iter().copied().map(point).collect();

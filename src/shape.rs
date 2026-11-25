@@ -282,7 +282,7 @@ mod tests {
             (Point::new(0, middle_y), Point::new(rect.x, middle_y)),
             (Point::new(right + 3, middle_y), Point::new(right, middle_y)),
         ] {
-            canvas.line(from, to, LineKind::Light, Part::Edge).unwrap();
+            canvas.path(&[from, to], LineKind::Light, Part::Edge).unwrap();
         }
         canvas
     }
@@ -337,7 +337,7 @@ mod tests {
         let mut canvas = Canvas::<Part>::new(8, 3).unwrap();
         canvas.shape(Rect::new(3, 0, 5, 3), Shape::Hexagon, Part::Node);
 
-        canvas.line(Point::new(0, 1), Point::new(3, 1), LineKind::Light, Part::Edge).unwrap();
+        canvas.horizontal(1, 0, 3, LineKind::Light, Part::Edge);
         canvas.tip(Point::new(2, 1), Direction::Right, Tip::Arrow, Part::Edge);
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "   ╱───╲\n──▸<   >\n   ╲───╱");
