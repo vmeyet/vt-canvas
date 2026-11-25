@@ -49,7 +49,7 @@ fn flowchart() -> Result<Canvas<Part>, Error> {
 
 fn node(canvas: &mut Canvas<Part>, rect: Rect, label: &str) {
     canvas.frame(rect, LineKind::Light, Corner::Square, Part::Node);
-    let label_width = u16::try_from(vt_canvas::width(label)).unwrap_or(rect.width);
+    let label_width = u16::try_from(vt_canvas::text_width(label)).unwrap_or(rect.width);
     canvas.text(Point::new(rect.x + rect.width.saturating_sub(label_width) / 2, rect.y + rect.height / 2), label, Part::Label);
 }
 

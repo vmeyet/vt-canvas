@@ -19,7 +19,8 @@ pub const MAX_WIDTH: u16 = 1_000;
 /// Most cells [`Canvas::new`] accepts, width times height: a narrow canvas can be tall.
 pub const MAX_CELLS: usize = 1_000_000;
 
-/// A stretch of one row whose cells share a role.
+/// A stretch of one row whose cells share a role and a background.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Run<R> {
     /// The cells' characters, without `\n`.
@@ -32,7 +33,7 @@ pub struct Run<R> {
 
 /// A drawing the canvas refuses.
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     /// The canvas would be wider than [`MAX_WIDTH`] or hold more than [`MAX_CELLS`] cells.
     TooLarge {
@@ -172,7 +173,7 @@ impl<R: Role> Canvas<R> {
         Ok(Self { width: columns, height: rows, cells: vec![Cell::Empty; columns * rows], grounds: vec![None; columns * rows] })
     }
 
-    /// Writes `text` on one row from `at`, cut at the right edge; see [`width`](crate::width) for what it leaves out.
+    /// Writes `text` on one row from `at`, cut at the right edge; see [`width`](crate::text_width) for what it leaves out.
     pub fn text(&mut self, at: Point, text: &str, role: R) {
         self.write(usize::from(at.x), usize::from(at.y), text, role, self.width);
     }
@@ -180,7 +181,7 @@ impl<R: Role> Canvas<R> {
     /// Writes `text` like [`text`](Self::text), cut to `max_width` columns, its last column an ellipsis when cut.
     pub fn text_cut(&mut self, at: Point, text: &str, max_width: u16, role: R) {
         let (x, y, max_width) = (usize::from(at.x), usize::from(at.y), usize::from(max_width));
-        if text::width(text) <= max_width {
+        if text::text_width(text) <= max_width {
             self.write(x, y, text, role, x + max_width);
         } else if max_width > 0 {
             let end = self.write(x, y, text, role, x + max_width - 1);
@@ -457,7 +458,7 @@ mod tests {
     fn render(canvas: &Canvas<Part>, glyphs: GlyphSet) -> String {
         let rows: Vec<String> = canvas.rows(glyphs).map(|runs| runs.into_iter().map(|run| run.text).collect()).collect();
         for row in &rows {
-            assert_eq!(crate::width(row), canvas.width, "row {row:?}");
+            assert_eq!(crate::text_width(row), canvas.width, "row {row:?}");
         }
         rows.join("\n")
     }
@@ -1062,7 +1063,7 @@ mod tests {
         }
 
         fn kind() -> impl Strategy<Value = LineKind> {
-            prop_oneof![Just(LineKind::Light), Just(LineKind::Heavy), Just(LineKind::Double), Just(LineKind::Dashed)]
+            prop::sample::select(LineKind::ALL)
         }
 
         fn straight() -> impl Strategy<Value = (Point, Point)> {
@@ -1082,7 +1083,7 @@ mod tests {
         }
 
         fn dots() -> impl Strategy<Value = Dots> {
-            prop_oneof![Just(Dots::Braille), Just(Dots::Octant), Just(Dots::Sextant), Just(Dots::Quadrant), Just(Dots::HalfBlock)]
+            prop::sample::select(Dots::ALL)
         }
 
         /// Dots and eighths reach past the canvas too, as far as `u32::MAX`.

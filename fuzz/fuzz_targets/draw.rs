@@ -71,7 +71,7 @@ fn apply(canvas: &mut Canvas<u8>, operation: &Operation) {
             canvas.frame(self::rect(*rect), line_kind(*kind), corner, *role);
         }
         Operation::Tip { at, direction, tip, role } => {
-            canvas.tip(point(*at), self::direction(*direction), Tip::ALL[usize::from(*tip) % Tip::ALL.len()], *role);
+            canvas.tip(point(*at), self::direction(*direction), tip_kind(*tip), *role);
         }
         Operation::Shape { rect, shape, role } => {
             canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], *role)
@@ -105,6 +105,10 @@ fn coordinate(value: u16) -> u16 {
 /// Dots and eighths past `FAR` cells are folded back too, but for the last ones before `u32::MAX`.
 fn fine(value: u32) -> u32 {
     if value > u32::MAX - u32::from(FAR) { value } else { value % (u32::from(FAR) * 8) }
+}
+
+fn tip_kind(byte: u8) -> Tip {
+    [Tip::Arrow, Tip::Triangle, Tip::Diamond, Tip::FilledDiamond, Tip::Ring, Tip::Bar, Tip::Fork, Tip::Cross][usize::from(byte) % 8]
 }
 
 fn dots(byte: u8) -> Dots {

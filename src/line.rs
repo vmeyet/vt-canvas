@@ -1,6 +1,7 @@
 use crate::geometry::Direction;
 
 /// How a line is drawn.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LineKind {
     /// `─ │`
@@ -11,6 +12,11 @@ pub enum LineKind {
     Double,
     /// `╌ ╎`, light where it meets another line.
     Dashed,
+}
+
+impl LineKind {
+    #[cfg(test)]
+    pub(crate) const ALL: &[Self] = &[Self::Light, Self::Heavy, Self::Double, Self::Dashed];
 }
 
 /// Which sides of a cell a line leaves through, and in which kind.

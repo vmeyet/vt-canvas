@@ -15,8 +15,8 @@ pub enum Symbol {
 }
 
 impl Symbol {
-    /// Every symbol, in the order the documentation lists them.
-    pub const ALL: [Self; 3] = [Self::Dot, Self::RingedDot, Self::FilledDiamond];
+    #[cfg(test)]
+    pub(crate) const ALL: &[Self] = &[Self::Dot, Self::RingedDot, Self::FilledDiamond];
 
     pub(crate) const fn glyph(self, glyphs: GlyphSet) -> char {
         match self {
@@ -24,5 +24,22 @@ impl Symbol {
             Self::RingedDot => glyphs.pick('◉', '@'),
             Self::FilledDiamond => glyphs.pick('⬥', '?'),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fails to build when a symbol is added, so that it is added to `Symbol::ALL` too.
+    #[test]
+    fn every_symbol_is_listed_once_in_order() {
+        let place = |symbol| match symbol {
+            Symbol::Dot => 0,
+            Symbol::RingedDot => 1,
+            Symbol::FilledDiamond => 2,
+        };
+
+        assert_eq!(Symbol::ALL.iter().map(|&symbol| place(symbol)).collect::<Vec<_>>(), (0..3).collect::<Vec<_>>());
     }
 }

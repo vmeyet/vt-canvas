@@ -10,7 +10,7 @@ This page says how the code is laid out today; when a module or a boundary chang
 - Drawing on it: text, lines and boxes whose crossings merge into the right junction glyph, and node shapes.
 - Drawing finer than a cell: blocks filling a cell by eighths, lines one eighth thick, wedges under or over a slanted edge, and dots on a grid of pixels that cuts each cell in 2 to 8.
 - Glyph sets: which characters a drawing uses, avoiding East Asian ambiguous-width glyphs where Unicode has a choice.
-- Measuring text: `width` says how many columns `Canvas::text` gives a string, so a caller sizes a box with the rule the canvas draws with.
+- Measuring text: `text_width` says how many columns `Canvas::text` gives a string, so a caller sizes a box with the rule the canvas draws with.
 
 ## Never
 
@@ -159,7 +159,7 @@ vt-canvas ← vt-graph ← vt-mermaid
 ```
 
 vt-canvas is the bottom: it depends on `unicode-width` only, called directly from `text`.
-mrk measures text with its own helper over the same crate; vt-canvas exposes `width` so its callers measure the way it draws.
+vt-canvas exposes `text_width` so its callers measure text the way it draws it.
 
 ## Fuzzing and properties
 

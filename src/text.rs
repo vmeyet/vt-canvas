@@ -1,7 +1,7 @@
 use unicode_width::UnicodeWidthChar;
 
 /// Columns `text` takes once drawn: control and zero-width characters are left out, wide characters count two.
-pub fn width(text: &str) -> usize {
+pub fn text_width(text: &str) -> usize {
     glyphs(text).map(|glyph| glyph.width).sum()
 }
 
@@ -24,13 +24,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn width_counts_wide_characters_twice() {
-        assert_eq!(width("a漢b"), 4);
+    fn text_width_counts_wide_characters_twice() {
+        assert_eq!(text_width("a漢b"), 4);
     }
 
     #[test]
-    fn width_leaves_out_control_and_zero_width_characters() {
-        assert_eq!(width("a\u{1b}[31m\tb\u{301}\u{200b}\n"), 6);
+    fn text_width_leaves_out_control_and_zero_width_characters() {
+        assert_eq!(text_width("a\u{1b}[31m\tb\u{301}\u{200b}\n"), 6);
     }
 
     #[test]

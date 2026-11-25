@@ -126,7 +126,7 @@ enum Inner {
 
 impl Shape {
     /// Every shape, in the order the documentation lists them.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: &[Self] = &[
         Self::Rectangle,
         Self::RoundedRectangle,
         Self::Stadium,
@@ -281,6 +281,29 @@ mod tests {
         canvas
     }
 
+    /// Fails to build when a shape is added, so that it is added to `Shape::ALL` too.
+    #[test]
+    fn every_shape_is_listed_once_in_order() {
+        let place = |shape| match shape {
+            Shape::Rectangle => 0,
+            Shape::RoundedRectangle => 1,
+            Shape::Stadium => 2,
+            Shape::Circle => 3,
+            Shape::DoubleCircle => 4,
+            Shape::Subroutine => 5,
+            Shape::Cylinder => 6,
+            Shape::Diamond => 7,
+            Shape::Hexagon => 8,
+            Shape::LeanRight => 9,
+            Shape::LeanLeft => 10,
+            Shape::Trapezoid => 11,
+            Shape::InvertedTrapezoid => 12,
+            Shape::Asymmetric => 13,
+        };
+
+        assert_eq!(Shape::ALL.iter().map(|&shape| place(shape)).collect::<Vec<_>>(), (0..14).collect::<Vec<_>>());
+    }
+
     fn every_shape(draw: impl Fn(Shape) -> Canvas<Part>, glyphs: GlyphSet) -> String {
         Shape::ALL.iter().map(|&shape| format!("{shape:?}\n{}", render(&draw(shape), glyphs))).collect::<Vec<_>>().join("\n\n")
     }
@@ -288,7 +311,7 @@ mod tests {
     /// Found by fuzzing: an inner line or a second bracket one cell inside a rectangle at the last column overflowed.
     #[test]
     fn a_shape_past_the_last_cell_draws_nothing() {
-        for shape in Shape::ALL {
+        for &shape in Shape::ALL {
             let mut canvas = Canvas::<Part>::new(2, 2).unwrap();
 
             canvas.shape(Rect::new(u16::MAX, u16::MAX, 5, 5), shape, Part::Node);
@@ -339,7 +362,7 @@ mod tests {
 
     #[test]
     fn every_shape_keeps_a_glyph_on_each_border_cell() {
-        for shape in Shape::ALL {
+        for &shape in Shape::ALL {
             let canvas = node(shape, 1);
             let rows: Vec<Vec<char>> = render(&canvas, GlyphSet::Unicode).lines().map(|row| row.chars().collect()).collect();
             let (right, bottom) = (rows[0].len() - 1, rows.len() - 1);

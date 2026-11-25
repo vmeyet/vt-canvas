@@ -27,9 +27,9 @@ pub enum Tip {
 }
 
 impl Tip {
-    /// Every tip, in the order the documentation lists them.
-    pub const ALL: [Self; 8] =
-        [Self::Arrow, Self::Triangle, Self::Diamond, Self::FilledDiamond, Self::Ring, Self::Bar, Self::Fork, Self::Cross];
+    #[cfg(test)]
+    pub(crate) const ALL: &[Self] =
+        &[Self::Arrow, Self::Triangle, Self::Diamond, Self::FilledDiamond, Self::Ring, Self::Bar, Self::Fork, Self::Cross];
 
     /// The tip facing a node `direction` points at: a fork opens onto it, an arrow or a triangle points at it.
     ///
@@ -54,5 +54,27 @@ impl Tip {
             (Self::Fork, Direction::Up) => glyphs.pick('V', 'v'),
             (Self::Cross, _) => glyphs.pick('╳', 'x'),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fails to build when a tip is added, so that it is added to `Tip::ALL` too.
+    #[test]
+    fn every_tip_is_listed_once_in_order() {
+        let place = |tip| match tip {
+            Tip::Arrow => 0,
+            Tip::Triangle => 1,
+            Tip::Diamond => 2,
+            Tip::FilledDiamond => 3,
+            Tip::Ring => 4,
+            Tip::Bar => 5,
+            Tip::Fork => 6,
+            Tip::Cross => 7,
+        };
+
+        assert_eq!(Tip::ALL.iter().map(|&tip| place(tip)).collect::<Vec<_>>(), (0..8).collect::<Vec<_>>());
     }
 }

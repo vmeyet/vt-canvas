@@ -23,6 +23,7 @@ impl Pixel {
 /// How many dots a cell is cut into, and the glyphs that light them.
 ///
 /// A cell lit by two roles keeps the last one for all its dots, but for [`HalfBlock`](Self::HalfBlock), whose two dots each keep theirs.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dots {
     /// 2 by 4 round dots, `⠉ ⡠ ⣿`: the finest dots nearly every font holds; ASCII draws it as [`Quadrant`](Self::Quadrant).
@@ -38,6 +39,9 @@ pub enum Dots {
 }
 
 impl Dots {
+    #[cfg(test)]
+    pub(crate) const ALL: &[Self] = &[Self::Braille, Self::Octant, Self::Sextant, Self::Quadrant, Self::HalfBlock];
+
     /// Dots across one cell.
     pub const fn across(self) -> u32 {
         match self {
@@ -236,11 +240,10 @@ pub(crate) mod tests {
     use crate::canvas::Canvas;
     use crate::role::tests::Part;
 
-    const ALL_DOTS: [Dots; 5] = [Dots::Braille, Dots::Octant, Dots::Sextant, Dots::Quadrant, Dots::HalfBlock];
     const SETS: [GlyphSet; 4] = [GlyphSet::Unicode, GlyphSet::Unicode13, GlyphSet::Unicode3, GlyphSet::Ascii];
 
     pub(crate) fn every_glyph() -> Vec<char> {
-        ALL_DOTS.into_iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, 0, GlyphSet::Unicode))).collect()
+        Dots::ALL.iter().flat_map(|dots| (0..=u8::MAX).map(move |lit| dots.glyph(lit, 0, GlyphSet::Unicode))).collect()
     }
 
     /// A ring and a line through it, so every slope and every dot of a cell is used.

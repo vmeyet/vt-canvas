@@ -4,6 +4,7 @@ use crate::line::{LineKind, Sides};
 /// The characters a drawing is read back in; text is written as given.
 ///
 /// Each Unicode set holds the glyphs of the ones after it, so a drawing asks for the best glyph and gets the closest the set has.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum GlyphSet {
     /// Everything [`Unicode13`](Self::Unicode13) has, and the octants of Unicode 16 (U+1CD00…), which few fonts hold yet:
@@ -179,8 +180,10 @@ mod tests {
     use crate::tip::Tip;
     use unicode_width::UnicodeWidthChar;
 
-    const KINDS: [Option<LineKind>; 5] =
-        [None, Some(LineKind::Light), Some(LineKind::Heavy), Some(LineKind::Double), Some(LineKind::Dashed)];
+    /// No line, then each kind.
+    fn kinds() -> impl Iterator<Item = Option<LineKind>> + Clone {
+        std::iter::once(None).chain(LineKind::ALL.iter().copied().map(Some))
+    }
 
     fn label(kind: Option<LineKind>) -> char {
         match kind {
@@ -198,7 +201,7 @@ mod tests {
 
     /// One row per (up, down) pair, one column per (left, right) pair.
     fn junction_table(set: GlyphSet) -> String {
-        let pairs = || KINDS.into_iter().flat_map(|first| KINDS.into_iter().map(move |second| (first, second)));
+        let pairs = || kinds().flat_map(|first| kinds().map(move |second| (first, second)));
         let header: String = pairs().map(|(left, right)| format!(" {}{}", label(left), label(right))).collect();
         let rows: Vec<String> = pairs()
             .map(|(up, down)| {
@@ -210,16 +213,14 @@ mod tests {
     }
 
     fn every_unicode_glyph() -> Vec<char> {
-        let all_sides = KINDS.into_iter().flat_map(|up| {
-            KINDS.into_iter().flat_map(move |right| {
-                KINDS.into_iter().flat_map(move |down| KINDS.into_iter().map(move |left| sides(up, right, down, left)))
-            })
+        let all_sides = kinds().flat_map(|up| {
+            kinds().flat_map(move |right| kinds().flat_map(move |down| kinds().map(move |left| sides(up, right, down, left))))
         });
         let lines = all_sides.flat_map(|sides| [false, true].map(|rounded| GlyphSet::Unicode.line(sides, rounded)));
         let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint]
             .map(|mark| mark.glyph(GlyphSet::Unicode));
-        let tips = Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|direction| tip.glyph(direction, GlyphSet::Unicode)));
-        let symbols = Symbol::ALL.map(|symbol| symbol.glyph(GlyphSet::Unicode));
+        let tips = Tip::ALL.iter().flat_map(|tip| Direction::ALL.map(|direction| tip.glyph(direction, GlyphSet::Unicode)));
+        let symbols = Symbol::ALL.iter().map(|symbol| symbol.glyph(GlyphSet::Unicode));
         let fills = [GlyphSet::Unicode.fill(0)];
         lines
             .chain(marks)

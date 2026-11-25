@@ -23,6 +23,6 @@ pub use pixel::{Dots, Pixel};
 pub use role::Role;
 pub use shape::{Inset, Shape};
 pub use symbol::Symbol;
-pub use text::width;
+pub use text::text_width;
 pub use tip::Tip;
 pub use wedge::{Fill, Wedge};
