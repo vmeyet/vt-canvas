@@ -5,6 +5,7 @@ use crate::glyph::GlyphSet;
 use crate::line::{LineKind, Sides};
 use crate::shape::{Mark, Marker, Shape};
 use crate::text;
+use crate::tip::Tip;
 
 /// Widest canvas [`Canvas::new`] accepts, in columns.
 pub const MAX_WIDTH: u16 = 1_000;
@@ -238,6 +239,19 @@ impl Canvas {
     /// Like a shape's mark, a line drawn onto it later leaves it whole, so an edge starting on it keeps it.
     pub fn marker(&mut self, at: Point, marker: Marker, role: Role) {
         self.put(usize::from(at.x), usize::from(at.y), Cell::Mark { mark: Mark::Marker(marker), role });
+    }
+
+    /// Draws `tip` on one cell, facing the node `heading` points at.
+    ///
+    /// A bar merges with the lines through its cell into `┼`; any other tip is kept under a line, as a shape's mark is.
+    pub fn tip(&mut self, at: Point, heading: Direction, tip: Tip, role: Role) {
+        let (x, y) = (usize::from(at.x), usize::from(at.y));
+        if tip == Tip::Bar {
+            let across = Direction::ALL.into_iter().fold(Sides::default(), |sides, side| sides.with(side, Some(LineKind::Light)));
+            self.draw_line(x, y, across, role);
+        } else {
+            self.put(x, y, Cell::Mark { mark: Mark::Tip(tip, heading), role });
+        }
     }
 
     /// Each row as runs of `(text, role)`, every row exactly as wide as the canvas and without `\n`.
@@ -513,6 +527,38 @@ mod tests {
 
         assert_eq!(render(&canvas, GlyphSet::Unicode), "───╳");
         assert_eq!(render(&canvas, GlyphSet::Ascii), "---x");
+    }
+
+    #[test]
+    fn tips_face_the_node_their_edge_goes_into() {
+        let mut canvas = canvas(8, 3);
+        line(&mut canvas, (0, 1), (7, 1), LineKind::Light);
+        let tips = [
+            (0, Direction::Left, Tip::Fork),
+            (1, Direction::Left, Tip::Bar),
+            (2, Direction::Left, Tip::Hollow),
+            (3, Direction::Up, Tip::Diamond),
+        ];
+        let more = [(4, Direction::Down, Tip::FilledDiamond), (5, Direction::Right, Tip::Ring), (6, Direction::Right, Tip::Fork)];
+
+        for (x, heading, tip) in tips.into_iter().chain(more) {
+            canvas.tip(Point::new(x, 1), heading, tip, Role::Edge);
+        }
+        canvas.tip(Point::new(7, 0), Direction::Down, Tip::Fork, Role::Edge);
+        canvas.tip(Point::new(7, 2), Direction::Up, Tip::Fork, Role::Edge);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "       Ʌ\n>┼◃⬦⬥o<─\n       V");
+        assert_eq!(render(&canvas, GlyphSet::Ascii), "       ^\n>+<o*o<-\n       v");
+    }
+
+    #[test]
+    fn a_bar_crosses_the_end_of_a_line() {
+        let mut canvas = canvas(3, 1);
+        line(&mut canvas, (0, 0), (1, 0), LineKind::Light);
+
+        canvas.tip(Point::new(1, 0), Direction::Right, Tip::Bar, Role::Edge);
+
+        assert_eq!(render(&canvas, GlyphSet::Unicode), "─┼ ");
     }
 
     #[test]

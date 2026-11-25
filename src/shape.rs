@@ -1,5 +1,6 @@
 use crate::canvas::Corner;
-use crate::geometry::{Point, Rect};
+use crate::geometry::{Direction, Point, Rect};
+use crate::tip::Tip;
 
 /// The outline [`Canvas::shape`](crate::Canvas::shape) draws around a rectangle, named after Mermaid's flowchart shapes.
 ///
@@ -67,6 +68,8 @@ pub(crate) enum Mark {
     Cross,
     /// A one-cell figure, drawn alone by [`Canvas::marker`](crate::Canvas::marker).
     Marker(Marker),
+    /// An edge's end facing a node the way the edge goes, drawn by [`Canvas::tip`](crate::Canvas::tip).
+    Tip(Tip, Direction),
 }
 
 /// A figure that fills one cell: a node too small for an outline.
@@ -203,6 +206,9 @@ impl Mark {
             Self::RightPoint => Self::LeftPoint,
             Self::Cross => Self::Cross,
             Self::Marker(marker) => Self::Marker(marker),
+            Self::Tip(tip, Direction::Left) => Self::Tip(tip, Direction::Right),
+            Self::Tip(tip, Direction::Right) => Self::Tip(tip, Direction::Left),
+            Self::Tip(tip, heading) => Self::Tip(tip, heading),
         }
     }
 }

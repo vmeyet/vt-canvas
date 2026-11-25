@@ -28,6 +28,7 @@ Sub-cell pixels and layers come with the charts.
 | `line` | `LineKind` and the four sides a line leaves a cell through |
 | `glyph` | `GlyphSet`: the character for a cell's sides, an arrow or a shape's mark, junction tables included |
 | `shape` | `Shape`, `Inset`: which border cells of a node's outline are slants or brackets instead of lines; `Marker`, a node on one cell |
+| `tip` | `Tip`: what an edge draws where it meets a node, a class relation's head or a crow's foot's part |
 | `text` | Which characters a cell can hold and how wide they are |
 | `geometry` | `Point`, `Rect`, `Direction` |
 
@@ -79,6 +80,9 @@ Slants are `/ \`; brackets and points are the same in both sets.
 Arrows are `▴ ▸ ▾ ◂` in Unicode, `^ > v <` in ASCII.
 `Canvas::cross` draws `╳`, `x` in ASCII, and keeps it under a line as a shape's mark is kept.
 `Canvas::marker` draws a node too small for an outline on one cell, kept under a line the same way: `Marker::Dot` `⬤`, `Marker::RingedDot` `◉` and `Marker::Diamond` `⬥`, `*`, `@` and `?` in ASCII; `●` and `◇` would be East Asian ambiguous.
+`Canvas::tip` draws an edge's end on one cell, facing the node it goes into, kept under a line the same way: `Tip::Hollow` `▹ ◃ ▵ ▿`, `Tip::Diamond` `⬦`, `Tip::FilledDiamond` `⬥`, `Tip::Ring` `o` and `Tip::Fork` `< > Ʌ V`, opening onto the node; in ASCII `> < ^ v`, `o`, `*`, `o` and `< > ^ v`.
+`Tip::Bar` is a line across the edge instead, merged with it into `┼` (`+`).
+`△ ▷ ◇ ◆ ○` would be East Asian ambiguous.
 
 ## Glyph width
 

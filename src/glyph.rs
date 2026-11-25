@@ -1,6 +1,7 @@
 use crate::geometry::Direction;
 use crate::line::{LineKind, Sides};
 use crate::shape::{Mark, Marker};
+use crate::tip::Tip;
 
 /// The characters lines, frames and arrows are drawn with; text is written as given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -41,6 +42,30 @@ impl GlyphSet {
             (Self::Ascii, Mark::Marker(Marker::Dot)) => '*',
             (Self::Ascii, Mark::Marker(Marker::RingedDot)) => '@',
             (Self::Ascii, Mark::Marker(Marker::Diamond)) => '?',
+            (_, Mark::Tip(tip, heading)) => self.tip(tip, heading),
+        }
+    }
+
+    /// A tip facing a node `heading` points at: a fork opens onto it, a hollow head points at it.
+    fn tip(self, tip: Tip, heading: Direction) -> char {
+        match (self, tip, heading) {
+            (Self::Unicode, Tip::Hollow, Direction::Up) => '▵',
+            (Self::Unicode, Tip::Hollow, Direction::Right) => '▹',
+            (Self::Unicode, Tip::Hollow, Direction::Down) => '▿',
+            (Self::Unicode, Tip::Hollow, Direction::Left) => '◃',
+            (Self::Ascii, Tip::Hollow, direction) => self.arrow(direction),
+            (Self::Unicode, Tip::Diamond, _) => '⬦',
+            (Self::Unicode, Tip::FilledDiamond, _) => '⬥',
+            (Self::Ascii, Tip::Diamond, _) | (_, Tip::Ring, _) => 'o',
+            (Self::Ascii, Tip::FilledDiamond, _) => '*',
+            (Self::Unicode, Tip::Bar, _) => '┼',
+            (Self::Ascii, Tip::Bar, _) => '+',
+            (_, Tip::Fork, Direction::Right) => '<',
+            (_, Tip::Fork, Direction::Left) => '>',
+            (Self::Unicode, Tip::Fork, Direction::Down) => 'Ʌ',
+            (Self::Ascii, Tip::Fork, Direction::Down) => '^',
+            (Self::Unicode, Tip::Fork, Direction::Up) => 'V',
+            (Self::Ascii, Tip::Fork, Direction::Up) => 'v',
         }
     }
 
@@ -222,6 +247,7 @@ mod tests {
         let marks = [Mark::Rising, Mark::Falling, Mark::LeftArc, Mark::RightArc, Mark::LeftPoint, Mark::RightPoint, Mark::Cross]
             .into_iter()
             .chain(Marker::ALL.map(Mark::Marker))
+            .chain(Tip::ALL.into_iter().flat_map(|tip| Direction::ALL.map(|heading| Mark::Tip(tip, heading))))
             .map(|mark| GlyphSet::Unicode.mark(mark));
         lines.chain(arrows).chain(marks).chain([GlyphSet::Unicode.ellipsis()]).filter(|glyph| *glyph != ' ').collect()
     }
