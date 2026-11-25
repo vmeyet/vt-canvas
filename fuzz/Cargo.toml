@@ -24,3 +24,8 @@ path = "fuzz_targets/draw.rs"
 test = false
 doc = false
 bench = false
+
+# cargo-fuzz leaves both off unless asked; the target should catch an overflow too.
+[profile.release]
+debug-assertions = true
+overflow-checks = true
