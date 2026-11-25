@@ -55,6 +55,8 @@ assert_eq!(lines, ["╭───╮    ╭───╮", "│ A ├───▸�
 - A canvas holds at most 1000 columns and 1000000 cells; drawing past its edges is clipped, never an error.
 - A cell holds one character: combining marks and other zero-width characters are left out, so a decomposed `é` (`e` then U+0301) draws as `e`.
   Normalize text to NFC first; scripts that need shaping or joining across cells are not drawn right.
+- Emoji modifier and ZWJ sequences are drawn one emoji per character, the joiner left out: `👍🏽` takes 4 columns and `👨‍👩‍👧` 6, where a terminal that joins them draws 2, so the rest of the row shifts left.
+  Leave modifiers and joiners out of text drawn on a canvas.
 
 ## Learn more
 

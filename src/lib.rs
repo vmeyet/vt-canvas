@@ -9,11 +9,13 @@ mod line;
 mod pixel;
 mod role;
 mod shape;
+mod styled;
 mod symbol;
 mod text;
 mod tip;
 mod wedge;
 
+pub use block::EIGHTHS;
 pub use canvas::{Canvas, Error, MAX_CELLS, MAX_WIDTH, Run};
 pub use frame::Corner;
 pub use geometry::{Direction, Point, Rect};

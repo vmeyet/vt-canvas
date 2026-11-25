@@ -3,29 +3,29 @@ source: src/wedge.rs
 expression: "tables.join(\"\\n\")"
 ---
 Unicode13
-Below from 0:  🭈🭊▐|
-Below from 1: 🬽🬭🭆🭄|
-Below from 2: 🬿🭑🬹🭂|
-Below from 3: ▌🭏🭍█|
-Above from 0: █🭞🭠▌|
-Above from 1: 🭓🬎🭜🭚|
-Above from 2: 🭕🭧🬂🭘|
-Above from 3: ▐🭥🭣 |
+Below from 0: █🭍🭏▌|
+Below from 1: 🭂🬹🭑🬿|
+Below from 2: 🭄🭆🬭🬽|
+Below from 3: ▐🭊🭈 |
+Above from 0:  🭣🭥▐|
+Above from 1: 🭘🬂🭧🭕|
+Above from 2: 🭚🭜🬎🭓|
+Above from 3: ▌🭠🭞█|
 Unicode3
-Below from 0:  ▁▃▄|
-Below from 1: ▁▃▄▅|
-Below from 2: ▃▄▅▇|
-Below from 3: ▄▅▇█|
-Above from 0: ██▀▀|
-Above from 1: █▀▀▀|
-Above from 2: ▀▀▀▔|
-Above from 3: ▀▀▔ |
+Below from 0: █▇▅▄|
+Below from 1: ▇▅▄▃|
+Below from 2: ▅▄▃▁|
+Below from 3: ▄▃▁ |
+Above from 0:  ▔▀▀|
+Above from 1: ▔▀▀▀|
+Above from 2: ▀▀▀█|
+Above from 3: ▀▀██|
 Ascii
-Below from 0:  ///|
-Below from 1: \_//|
-Below from 2: \\#/|
-Below from 3: \\\#|
-Above from 0: #///|
-Above from 1: \#//|
-Above from 2: \\"/|
-Above from 3: \\\ |
+Below from 0: #\\\|
+Below from 1: /#\\|
+Below from 2: //_\|
+Below from 3: /// |
+Above from 0:  \\\|
+Above from 1: /"\\|
+Above from 2: //#\|
+Above from 3: ///#|

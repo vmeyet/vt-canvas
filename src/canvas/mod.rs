@@ -10,6 +10,7 @@ use crate::line::Sides;
 use crate::pixel::{Dots, Halves};
 use crate::role::Role;
 use crate::shape::Mark;
+use crate::styled::Styled;
 use crate::symbol::Symbol;
 use crate::text;
 use crate::tip::Tip;
@@ -37,6 +38,7 @@ pub struct Run<R> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     /// The canvas would be wider than [`MAX_WIDTH`] or hold more than [`MAX_CELLS`] cells.
+    #[non_exhaustive]
     TooLarge {
         /// Columns asked for.
         width: u16,
@@ -44,6 +46,7 @@ pub enum Error {
         height: u16,
     },
     /// Two consecutive points of a path share neither a row nor a column.
+    #[non_exhaustive]
     Diagonal {
         /// Where the step starts.
         from: Point,
@@ -185,6 +188,8 @@ impl<R: Role> Canvas<R> {
     }
 
     /// Writes `text` on one row from `at`, cut at the right edge; see [`text_width`](crate::text_width) for what it leaves out.
+    ///
+    /// A wide character is drawn on its left cell's background: the terminal paints one colour behind both its columns.
     pub fn text(&mut self, at: Point, text: &str, role: R) {
         self.write(at, text, self.width, role);
     }
@@ -252,14 +257,6 @@ impl<R: Role> Canvas<R> {
     fn index(&self, at: Point) -> Option<usize> {
         (at.x < self.width && at.y < self.height).then(|| usize::from(at.y) * usize::from(self.width) + usize::from(at.x))
     }
-}
-
-/// A cell as it is written: its character, the role it is drawn in and the role behind it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Styled<R> {
-    pub(crate) char: char,
-    pub(crate) role: R,
-    pub(crate) background: Option<R>,
 }
 
 fn runs<R: Role>(cells: &[Cell<R>], grounds: &[Option<R>], glyphs: GlyphSet) -> Vec<Run<R>> {
@@ -623,8 +620,8 @@ pub(crate) mod tests {
 
         fn draw(canvas: &mut Canvas<Part>, fine: Fine, role: Part) {
             match fine {
-                Fine::Column(x, eighths) => canvas.column(x, eighths, role),
-                Fine::Row(y, eighths) => canvas.row(y, eighths, role),
+                Fine::Column(x, eighths) => canvas.fill_column(x, eighths, role),
+                Fine::Row(y, eighths) => canvas.fill_row(y, eighths, role),
                 Fine::Stroke(x, eighth) => canvas.stroke(x, eighth, role),
                 Fine::Wedge(at, wedge) => canvas.wedge(at, wedge, role),
                 Fine::Segment(from, to, dots) => canvas.segment(from, to, dots, role),
@@ -676,8 +673,8 @@ pub(crate) mod tests {
                     draw(&mut canvas, fine, Part::Series(1));
                 }
 
-                canvas.row(0, 0..64, Part::Series(0));
-                canvas.row(1, 0..64, Part::Series(0));
+                canvas.fill_row(0, 0..64, Part::Series(0));
+                canvas.fill_row(1, 0..64, Part::Series(0));
 
                 let whole = || vec![Run { text: "█".repeat(8), role: Part::Series(0), background: None }];
                 prop_assert_eq!(canvas.rows(GlyphSet::Unicode).collect::<Vec<_>>(), [whole(), whole()]);

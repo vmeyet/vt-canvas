@@ -3,15 +3,13 @@ name = "vt-canvas"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
-description = "A terminal cell grid: text, lines and boxes with junction merging, finer than a cell, glyph sets; returns styled cells, never ANSI."
+description = "A terminal cell grid: text, lines and boxes with junction merging, drawings finer than a cell, glyph sets; returns styled cells, never ANSI."
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/vmeyet/vt-canvas"
-homepage = "https://github.com/vmeyet/vt-canvas"
-documentation = "https://docs.rs/vt-canvas"
 keywords = ["terminal", "box-drawing", "canvas", "ascii", "diagram"]
 categories = ["command-line-interface", "visualization", "text-processing"]
-include = ["/src/**/*.rs", "/examples/**/*.rs", "/README.md", "/LICENSE"]
+include = ["/src/**/*.rs", "/src/**/*.snap", "/examples/**/*.rs", "/README.md", "/LICENSE"]
 autobenches = false
 
 [[bench]]

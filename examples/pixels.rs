@@ -31,7 +31,7 @@ fn drawing() -> Result<Canvas<u8>, Error> {
 
 fn bars_under_a_stroke(canvas: &mut Canvas<u8>) {
     for (x, eighths) in [(0, 9), (1, 9), (3, 21), (4, 21), (6, 30), (7, 30)] {
-        canvas.column(x, 32 - eighths..32, 0);
+        canvas.fill_column(x, 32 - eighths..32, 0);
     }
     for x in 0..8 {
         canvas.stroke(x, 26 - u32::from(x) * 3, 1);
@@ -41,13 +41,13 @@ fn bars_under_a_stroke(canvas: &mut Canvas<u8>) {
 /// A band two rows thick falling one row over three cells, then level.
 fn band(canvas: &mut Canvas<u8>, left: u16) {
     for (step, x) in (left..left + 3).enumerate() {
-        let (high, low) = (3 - step as u8, 2 - step as u8);
+        let (high, low) = (step as u8, step as u8 + 1);
         canvas.wedge(Point::new(x, 0), Wedge { left: high, right: low, fill: Fill::Below }, 2);
-        canvas.column(x, 8..16, 2);
+        canvas.fill_column(x, 8..16, 2);
         canvas.wedge(Point::new(x, 2), Wedge { left: high, right: low, fill: Fill::Above }, 2);
     }
     for x in left + 3..left + 6 {
-        canvas.column(x, 8..24, 2);
+        canvas.fill_column(x, 8..24, 2);
     }
 }
 

@@ -196,11 +196,12 @@ impl Shape {
         }
     }
 
-    /// The marks replacing border cells, with a double circle's second bracket.
-    pub(crate) fn marks(self, border: Border) -> Vec<Placed> {
+    /// The marks replacing border cells, with a double circle's second bracket, on the rows above `canvas_height` only.
+    pub(crate) fn marks(self, border: Border, canvas_height: u16) -> Vec<Placed> {
         let outline = self.outline();
         let second = matches!(outline.inner, Inner::SecondBrackets) && border.width > 3;
-        (0..border.height)
+        let visible = border.height.min(canvas_height.saturating_sub(border.top));
+        (0..visible)
             .flat_map(|row| {
                 let y = border.top.saturating_add(row);
                 let on = |x, side: Side| side.mark(row, border.height).map(|mark| Placed { at: Point::new(x, y), mark });
@@ -412,5 +413,14 @@ mod tests {
         canvas.shape(Rect::new(1, 1, u16::MAX, u16::MAX), Shape::Trapezoid, Part::Node);
 
         assert_eq!(render(&canvas, GlyphSet::Ascii), "   \n /-");
+    }
+
+    #[test]
+    fn marks_below_the_canvas_are_never_built() {
+        let border = Rect::new(0, 1, 4, u16::MAX).border().unwrap();
+
+        let marks = Shape::Hexagon.marks(border, 3);
+
+        assert_eq!(marks.iter().map(|placed| placed.at.y).collect::<Vec<_>>(), [1, 1, 2, 2]);
     }
 }

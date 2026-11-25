@@ -77,8 +77,8 @@ fn apply(canvas: &mut Canvas<u8>, operation: &Operation) {
         Operation::Shape { rect, shape, role } => {
             canvas.shape(self::rect(*rect), Shape::ALL[usize::from(*shape) % Shape::ALL.len()], *role)
         }
-        Operation::Column { x, eighths, role } => canvas.column(coordinate(*x), fine(eighths.0)..fine(eighths.1), *role),
-        Operation::Row { y, eighths, role } => canvas.row(coordinate(*y), fine(eighths.0)..fine(eighths.1), *role),
+        Operation::Column { x, eighths, role } => canvas.fill_column(coordinate(*x), fine(eighths.0)..fine(eighths.1), *role),
+        Operation::Row { y, eighths, role } => canvas.fill_row(coordinate(*y), fine(eighths.0)..fine(eighths.1), *role),
         Operation::Stroke { x, eighth, role } => canvas.stroke(coordinate(*x), fine(*eighth), *role),
         Operation::Wedge { at, left, right, above, role } => {
             let fill = if *above { Fill::Above } else { Fill::Below };

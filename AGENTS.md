@@ -1,6 +1,6 @@
 # Working in this repo
 
-`vt-canvas` is a Rust library: a terminal cell grid: text, lines and boxes with junction merging, finer than a cell, glyph sets; returns styled cells, never ANSI.
+`vt-canvas` is a Rust library: a terminal cell grid: text, lines and boxes with junction merging, drawings finer than a cell, glyph sets; returns styled cells, never ANSI.
 Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first.
 The code is the contract; `ARCHITECTURE.md` describes it, and a change to a module or a boundary updates it in the same change.
 

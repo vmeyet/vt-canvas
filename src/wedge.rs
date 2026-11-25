@@ -1,25 +1,25 @@
 use crate::block::{Block, Cover};
-use crate::canvas::Styled;
 use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
 use crate::role::Role;
+use crate::styled::Styled;
 
 const THIRDS: u8 = 3;
 
-/// The glyph filled below an edge, by the thirds it meets the left side at, then the right side.
+/// The glyph filled below an edge, by the thirds it meets the left side at, then the right side, counted down from the top.
 ///
 /// Legacy Computing has no edge from a bottom corner to the opposite top corner; the half block on the filled side stands in.
 const BELOW: [[char; 4]; 4] = [
-    [' ', '\u{1FB48}', '\u{1FB4A}', '▐'],
-    ['\u{1FB3D}', '\u{1FB2D}', '\u{1FB46}', '\u{1FB44}'],
-    ['\u{1FB3F}', '\u{1FB51}', '\u{1FB39}', '\u{1FB42}'],
-    ['▌', '\u{1FB4F}', '\u{1FB4D}', '█'],
+    ['█', '\u{1FB4D}', '\u{1FB4F}', '▌'],
+    ['\u{1FB42}', '\u{1FB39}', '\u{1FB51}', '\u{1FB3F}'],
+    ['\u{1FB44}', '\u{1FB46}', '\u{1FB2D}', '\u{1FB3D}'],
+    ['▐', '\u{1FB4A}', '\u{1FB48}', ' '],
 ];
 const ABOVE: [[char; 4]; 4] = [
-    ['█', '\u{1FB5E}', '\u{1FB60}', '▌'],
-    ['\u{1FB53}', '\u{1FB0E}', '\u{1FB5C}', '\u{1FB5A}'],
-    ['\u{1FB55}', '\u{1FB67}', '\u{1FB02}', '\u{1FB58}'],
-    ['▐', '\u{1FB65}', '\u{1FB63}', ' '],
+    [' ', '\u{1FB63}', '\u{1FB65}', '▐'],
+    ['\u{1FB58}', '\u{1FB02}', '\u{1FB67}', '\u{1FB55}'],
+    ['\u{1FB5A}', '\u{1FB5C}', '\u{1FB0E}', '\u{1FB53}'],
+    ['▌', '\u{1FB60}', '\u{1FB5E}', '█'],
 ];
 
 /// Which side of a [`Wedge`]'s edge is filled.
@@ -34,7 +34,7 @@ pub enum Fill {
 /// The part of a cell on one side of a straight edge running from its left side to its right side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Wedge {
-    /// Where the edge meets the left side, in thirds of the cell above its bottom: 0 to 3, more counts as 3.
+    /// Where the edge meets the left side, in thirds of the cell below its top: 0 to 3, more counts as 3.
     pub left: u8,
     /// Where the edge meets the right side, counted the same way.
     pub right: u8,
@@ -43,8 +43,8 @@ pub struct Wedge {
 }
 
 impl Wedge {
-    /// Sixths of the cell under the edge.
-    const fn below(self) -> u8 {
+    /// Sixths of the cell over the edge.
+    const fn above(self) -> u8 {
         self.left() + self.right()
     }
 
@@ -58,8 +58,8 @@ impl Wedge {
 
     const fn filled(self) -> u8 {
         match self.fill {
-            Fill::Below => self.below(),
-            Fill::Above => 2 * THIRDS - self.below(),
+            Fill::Below => 2 * THIRDS - self.above(),
+            Fill::Above => self.above(),
         }
     }
 
@@ -96,8 +96,8 @@ impl Wedge {
 
     fn ascii(self, texture: u8) -> char {
         match self.left().cmp(&self.right()) {
-            std::cmp::Ordering::Less => '/',
-            std::cmp::Ordering::Greater => '\\',
+            std::cmp::Ordering::Greater => '/',
+            std::cmp::Ordering::Less => '\\',
             std::cmp::Ordering::Equal => self.level().ascii(texture),
         }
     }
@@ -152,8 +152,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn thirds_past_the_top_of_the_cell_count_as_the_top() {
-        let wedge = Wedge { left: 200, right: 9, fill: Fill::Below };
+    fn thirds_past_the_bottom_of_the_cell_count_as_the_bottom() {
+        let wedge = Wedge { left: 200, right: 9, fill: Fill::Above };
 
         assert_eq!(wedge.cover().parts, Cover::WHOLE);
         assert_eq!(wedge.styled(Part::Plain, None, GlyphSet::Unicode).char, '█');

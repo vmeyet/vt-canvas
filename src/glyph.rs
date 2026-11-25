@@ -9,6 +9,8 @@ use crate::line::{LineKind, Sides};
 pub enum GlyphSet {
     /// Everything [`Unicode13`](Self::Unicode13) has, and the octants of Unicode 16 (U+1CD00…), which few fonts hold yet:
     /// for terminals that draw block glyphs themselves (Ghostty, kitty, WezTerm, foot).
+    ///
+    /// It is the newest set this version knows: a minor release may add the glyphs of a newer Unicode to it.
     #[default]
     Unicode,
     /// Everything [`Unicode3`](Self::Unicode3) has, and Symbols for Legacy Computing (Unicode 13, U+1FB00…):

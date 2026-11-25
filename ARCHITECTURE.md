@@ -30,12 +30,13 @@ This page says how the code is laid out today; when a module or a boundary chang
 | `role` | `Role`: what the canvas asks of the caller's role type, its ASCII texture |
 | `line` | `LineKind` and the four sides a line leaves a cell through |
 | `glyph` | `GlyphSet`: the character for a cell's sides or a filled cell, junction tables included |
-| `block` | A cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, the cells a stretch covers, and how much of a cell a glyph covers |
+| `block` | `EIGHTHS`, a cell filled by eighths from one side and a line one eighth thick, their glyphs in each set, the cells a stretch covers, and how much of a cell a glyph covers |
 | `pixel` | `Dots`, `Pixel`: the dots of a cell and their glyph in each set, the two halves of a half-block cell, and the dots of a straight line |
 | `wedge` | `Wedge`, `Fill`: a cell filled under or over a slanted edge, its glyph in each set |
 | `shape` | `Shape`, `Inset`: each shape's outline in one place, which border cells are slants or brackets instead of lines, and their glyphs |
 | `symbol` | `Symbol`: a node on one cell, and its glyph |
 | `tip` | `Tip`: what an edge draws where it meets a node, an arrow, a cross, a class relation's head or a crow's foot's part, and its glyph |
+| `styled` | A cell as it is read back, its character, its role and the role behind it: what `canvas` asks of `block`, `pixel` and `wedge` |
 | `text` | Which characters a cell can hold and how wide they are |
 | `geometry` | `Point`, `Rect`, `Direction` |
 
@@ -59,14 +60,14 @@ This page says how the code is laid out today; when a module or a boundary chang
 
 ## Finer than a cell
 
-`column` and `row` fill a stretch of one column or one row, its two ends counted in eighths of a cell from the top or the left of the canvas.
+`fill_column` and `fill_row` fill a stretch of one column or one row, its two ends counted in eighths of a cell from the top or the left of the canvas.
 Each cell the stretch covers becomes a block filled from one of its sides: `▁▂▃▄▅▆▇█` from the bottom, `▏▎▍▌▋▊▉█` from the left, `▔🮂🮃▀🮄🮅🮆█` from the top, `▕🮇🮈▐🮉🮊🮋█` from the right.
 A stretch that touches neither side of its cell has no glyph: it keeps its size and moves to the side it is nearer.
 
 `stroke` draws a line one eighth of a row thick across one column, at any eighth of a row: `▔🭶🭷🭸🭹🭺🭻▁`.
 It is how a line passes in front of a bar: the bar stays behind it as the cell's background.
 
-`wedge` fills the part of a cell under or over an edge that runs from its left side to its right side, each end at 0 to 3 thirds of the cell's height: `🭈 🭊 🬽 🭆 🭄 🬿 🭑 🭂 🭏 🭍` below, `🭞 🭠 🭓 🭜 🭚 🭕 🭧 🭘 🭥 🭣` above, and the sextant rows `🬭 🬹 🬎 🬂` where the edge is level.
+`wedge` fills the part of a cell under or over an edge that runs from its left side to its right side, each end 0 to 3 thirds of the cell's height below its top, as every coordinate counts down: `🭈 🭊 🬽 🭆 🭄 🬿 🭑 🭂 🭏 🭍` below, `🭞 🭠 🭓 🭜 🭚 🭕 🭧 🭘 🭥 🭣` above, and the sextant rows `🬭 🬹 🬎 🬂` where the edge is level.
 Legacy Computing has no edge from a bottom corner to the opposite top corner: `▌` or `▐`, the half on the filled side, stands in.
 
 `dot` lights one dot of a grid of pixels over the cells and `segment` the dots of a straight line; `Dots` says how many dots a cell holds and which glyphs light them.
@@ -95,6 +96,8 @@ Each cell keeps a glyph with its role and, behind it, a *background* role.
    Text, a line, a stroke or dots leave the whole cell, so a block stays behind them from half a cell up.
    A block or a wedge leaves what it does not fill: `▅` drawn over `▔` keeps it, as the upper quarter is most of the three eighths left, and the cell shows both roles.
 3. Otherwise the background stays as it was, until a drawing that fills the whole cell clears it.
+
+A wide character is drawn on its left cell's background, as a terminal paints one colour behind both its columns.
 
 So text, a line, a stroke or dots over a bar are drawn on the bar's colour, a block drawn over a taller one shows both, and two bands meeting in a cell fill it between them.
 Where a third role would be needed (a line through the cell a bar ends in), the bar gains or loses under half a cell.
@@ -129,7 +132,8 @@ Tried on the flowchart spike's output: frames are drawn before edges, so a pass 
 Flowchart edges only meet at nodes, so a `┼` between nodes is never read as a join.
 
 A junction has one role.
-When the new line only ends on the cell and the cell already has two sides or more, a side or a corner of a border, the junction keeps that border's role, so a node's border stays whole in its colour where an edge joins it (`┤`, `├` on a corner); otherwise it takes the role of the line drawn last, so an edge crossing a frame stays whole in its colour.
+When the new line only ends on the cell, adds a side the cell lacks, and the cell already has two sides or more, a side or a corner of a border, the junction keeps that border's role, so a node's border stays whole in its colour where an edge joins it (`┤`, `├` on a corner).
+Otherwise it takes the role of the line drawn last, so an edge crossing a frame stays whole in its colour, and a frame or a shape redrawn in another role is wholly in that role, its corners included.
 
 ## Glyph sets
 

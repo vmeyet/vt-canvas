@@ -1,8 +1,8 @@
 use crate::block::Cover;
-use crate::canvas::Styled;
 use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
 use crate::role::Role;
+use crate::styled::Styled;
 
 /// A dot on the grid [`Dots`] cuts the cells into: `x` counts dots from the left of the canvas, `y` from its top.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

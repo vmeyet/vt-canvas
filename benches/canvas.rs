@@ -51,7 +51,7 @@ fn bars_under_dots() -> Result<Canvas<u8>, Error> {
     let mut canvas = Canvas::new(MAX_WIDTH, HEIGHT)?;
     let bottom = u32::from(HEIGHT) * 8;
     for x in 0..MAX_WIDTH {
-        canvas.column(x, u32::from(x) * 7 % bottom..bottom, 0);
+        canvas.fill_column(x, u32::from(x) * 7 % bottom..bottom, 0);
     }
     let right = u32::from(MAX_WIDTH) * Dots::Octant.across() - 1;
     for y in 0..u32::from(HEIGHT) {

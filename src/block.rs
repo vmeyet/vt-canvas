@@ -1,12 +1,16 @@
 use std::ops::Range;
 
-use crate::canvas::Styled;
 use crate::geometry::Direction;
 use crate::glyph::GlyphSet;
 use crate::role::Role;
+use crate::styled::Styled;
 
-const EIGHTHS: u8 = 8;
-const HALF: u8 = EIGHTHS / 2;
+/// Eighths in a cell: [`Canvas::fill_column`](crate::Canvas::fill_column), [`Canvas::fill_row`](crate::Canvas::fill_row)
+/// and [`Canvas::stroke`](crate::Canvas::stroke) count in them from the top or the left of the canvas.
+pub const EIGHTHS: u32 = 8;
+/// A whole cell, in eighths.
+const CELL: u8 = EIGHTHS as u8;
+const HALF: u8 = CELL / 2;
 
 const FROM_DOWN: [char; 7] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇'];
 const FROM_LEFT: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
@@ -53,11 +57,11 @@ pub(crate) struct Stroke {
 impl Stroke {
     /// The stroke `eighth` eighths of a row below the top of the canvas, in the cell of the row [`row`](Self::row) gives.
     pub(crate) const fn at(eighth: u32) -> Self {
-        Self { level: (eighth % EIGHTHS as u32) as u8 }
+        Self { level: (eighth % EIGHTHS) as u8 }
     }
 
     pub(crate) const fn row(eighth: u32) -> u32 {
-        eighth / EIGHTHS as u32
+        eighth / EIGHTHS
     }
 
     /// Without the Legacy Computing lines a stroke is the nearest of the top of the cell, its middle and its bottom.
@@ -91,7 +95,7 @@ impl Block {
     ///
     /// A stretch touching neither side has no glyph: it keeps its size and moves to the side it is nearer.
     const fn between(low: u8, high: u8, low_side: Direction) -> Self {
-        let nearer_low = low == 0 || (high < EIGHTHS && low + high < EIGHTHS);
+        let nearer_low = low == 0 || (high < CELL && low + high < CELL);
         Self::new(if nearer_low { low_side } else { low_side.opposite() }, high - low)
     }
 
@@ -100,7 +104,7 @@ impl Block {
     }
 
     pub(crate) const fn cover(self) -> Cover {
-        Cover { from: self.from, parts: self.eighths * (Cover::WHOLE / EIGHTHS) }
+        Cover { from: self.from, parts: self.eighths * (Cover::WHOLE / CELL) }
     }
 
     pub(crate) fn styled<R: Role>(self, role: R, ground: Option<R>, glyphs: GlyphSet) -> Styled<R> {
@@ -126,7 +130,7 @@ impl Block {
         let eighths = if in_unicode3 || glyphs.holds(GlyphSet::Unicode13) { self.eighths } else { coarse(self.eighths) };
         match eighths {
             0 => ' ',
-            1..EIGHTHS => table[usize::from(eighths) - 1],
+            1..CELL => table[usize::from(eighths) - 1],
             _ => glyphs.fill(0),
         }
     }
@@ -148,7 +152,7 @@ const fn coarse(eighths: u8) -> u8 {
         0 => 0,
         1..=2 => 1,
         3..=5 => HALF,
-        _ => EIGHTHS,
+        _ => CELL,
     }
 }
 
@@ -163,12 +167,11 @@ pub(crate) struct Placed {
 ///
 /// `eighths` counts eighths of a cell from the first of `cells` cells, whose side `low_side` faces the start; what is past the last cell is cut.
 pub(crate) fn span(eighths: Range<u32>, cells: u16, low_side: Direction) -> impl Iterator<Item = Placed> {
-    let per_cell = u32::from(EIGHTHS);
-    let end = eighths.end.min(u32::from(cells) * per_cell);
+    let end = eighths.end.min(u32::from(cells) * EIGHTHS);
     let start = eighths.start.min(end);
-    (start / per_cell..end.div_ceil(per_cell)).filter(move |_| start < end).map(move |cell| {
-        let low = start.saturating_sub(cell * per_cell);
-        let high = (end - cell * per_cell).min(per_cell);
+    (start / EIGHTHS..end.div_ceil(EIGHTHS)).filter(move |_| start < end).map(move |cell| {
+        let low = start.saturating_sub(cell * EIGHTHS);
+        let high = (end - cell * EIGHTHS).min(EIGHTHS);
         Placed { cell: cell as u16, block: Block::between(low as u8, high as u8, low_side) }
     })
 }
@@ -209,7 +212,7 @@ pub(crate) mod tests {
             .into_iter()
             .flat_map(|glyphs| Direction::ALL.map(move |from| (glyphs, from)))
             .map(|(glyphs, from)| {
-                let row: String = (1..=EIGHTHS).map(|eighths| Block { from, eighths }.styled(Part::Series(1), None, glyphs).char).collect();
+                let row: String = (1..=CELL).map(|eighths| Block { from, eighths }.styled(Part::Series(1), None, glyphs).char).collect();
                 format!("{glyphs:?} from {from:?}: {row}")
             })
             .collect();

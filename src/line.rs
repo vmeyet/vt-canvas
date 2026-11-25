@@ -61,6 +61,11 @@ impl Sides {
         Direction::ALL.into_iter().any(|side| self.get(side).is_some() && self.get(side.opposite()).is_some())
     }
 
+    /// Whether a side of `self` is one `other` lacks.
+    pub(crate) fn adds_to(self, other: Self) -> bool {
+        self.drawn().any(|(side, _)| other.get(side).is_none())
+    }
+
     pub(crate) fn has_horizontal(self) -> bool {
         self.drawn().any(|(side, _)| side.is_horizontal())
     }

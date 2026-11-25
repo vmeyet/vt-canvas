@@ -49,7 +49,7 @@ impl<R: Role> Canvas<R> {
         for [from, to] in shape.inner_lines(border) {
             self.draw_straight(from, to, LineKind::Light, role);
         }
-        for placed in shape.marks(border) {
+        for placed in shape.marks(border, self.height) {
             self.put(placed.at, Cell::Mark { mark: placed.mark, role });
         }
     }
@@ -106,13 +106,15 @@ impl<R: Role> Canvas<R> {
 
     /// Merges `sides` into the lines of the cell; a line with both ends on one cell leaves it through no side, so it draws nothing.
     ///
-    /// A junction keeps the role of the border it is on (two sides or more) when the new line only ends on it, so a
-    /// node's border stays whole where an edge joins it; otherwise it takes the new line's role.
+    /// A junction keeps the role of the border it is on (two sides or more) when the new line only ends on it and adds
+    /// a side the border lacks, so a node's border stays whole where an edge joins it; otherwise it takes the new line's
+    /// role, so a frame redrawn in another role is wholly in that role.
     fn join(&mut self, at: Point, sides: Sides, role: R) {
         let Some(index) = self.index(at).filter(|_| sides.count() > 0) else { return };
         match self.cells[index] {
             Cell::Line { sides: below, rounded, role: below_role } => {
-                let role = if below.count() > 1 && !sides.runs_through() { below_role } else { role };
+                let joins_border = below.count() > 1 && !sides.runs_through() && sides.adds_to(below);
+                let role = if joins_border { below_role } else { role };
                 self.cells[index] = Cell::Line { sides: below.merge(sides), rounded, role };
             }
             Cell::Mark { .. } | Cell::Tip { .. } | Cell::Symbol { .. } => {}
@@ -420,6 +422,32 @@ mod tests {
         line(&mut canvas, (0, 0), (1, 0), LineKind::Light);
 
         assert_eq!(styles(&canvas, GlyphSet::Unicode)[0], "[─ Edge on None][┬─╮ Node on None]");
+    }
+
+    #[test]
+    fn a_frame_redrawn_in_another_role_is_wholly_in_that_role() {
+        let mut canvas = canvas(5, 4);
+        canvas.frame(Rect::new(0, 1, 5, 3), LineKind::Light, Corner::Square, Part::Node);
+        line(&mut canvas, (2, 0), (2, 1), LineKind::Light);
+        line(&mut canvas, (0, 0), (0, 1), LineKind::Light);
+
+        canvas.frame(Rect::new(0, 1, 5, 3), LineKind::Light, Corner::Square, Part::Series(0));
+
+        let styles = styles(&canvas, GlyphSet::Unicode);
+        assert_eq!([&styles[1], &styles[3]], ["[├─┴─┐ Series(0) on None]", "[└───┘ Series(0) on None]"]);
+    }
+
+    #[test]
+    fn a_shape_redrawn_in_another_role_is_wholly_in_that_role() {
+        let mut canvas = canvas(6, 3);
+        canvas.shape(Rect::new(0, 0, 6, 3), Shape::Cylinder, Part::Node);
+
+        canvas.shape(Rect::new(0, 0, 6, 3), Shape::Cylinder, Part::Series(0));
+
+        assert_eq!(
+            styles(&canvas, GlyphSet::Unicode),
+            ["[╭────╮ Series(0) on None]", "[├────┤ Series(0) on None]", "[╰────╯ Series(0) on None]"]
+        );
     }
 
     #[test]
